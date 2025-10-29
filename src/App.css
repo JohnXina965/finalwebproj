@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-bg {
+  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes eco-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-eco-gradient {
+  background: linear-gradient(-45deg, #d4fc79, #96e6a1, #84fab0, #8fd3f4);
+  background-size: 400% 400%;
+  animation: eco-gradient 12s ease infinite;
+}
+
+@keyframes multi-layer {
+  0% {
+    background: 
+      radial-gradient(circle at 20% 80%, rgba(120, 219, 226, 0.3) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(255, 203, 139, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(120, 219, 226, 0.2) 0%, transparent 50%),
+      linear-gradient(135deg, #a8e6cf 0%, #88d8b0 50%, #6ec6ca 100%);
+  }
+  50% {
+    background: 
+      radial-gradient(circle at 80% 80%, rgba(120, 219, 226, 0.3) 0%, transparent 50%),
+      radial-gradient(circle at 20% 20%, rgba(255, 203, 139, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 60% 60%, rgba(120, 219, 226, 0.2) 0%, transparent 50%),
+      linear-gradient(135deg, #88d8b0 0%, #6ec6ca 50%, #35a7ff 100%);
+  }
+  100% {
+    background: 
+      radial-gradient(circle at 20% 80%, rgba(120, 219, 226, 0.3) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(255, 203, 139, 0.2) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(120, 219, 226, 0.2) 0%, transparent 50%),
+      linear-gradient(135deg, #a8e6cf 0%, #88d8b0 50%, #6ec6ca 100%);
+  }
+}
+
+.animate-multi-layer {
+  animation: multi-layer 20s ease-in-out infinite;
+  background-size: 400% 400%;
+}
