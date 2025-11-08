@@ -8,7 +8,12 @@ import {
   sendPasswordResetEmail,
   sendEmailVerification,
   signInWithPopup,
-  signOut
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+  fetchSignInMethodsForEmail,
+  linkWithCredential,
+  EmailAuthProvider
 } from "firebase/auth";
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -39,7 +44,13 @@ export {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithPopup,
-  signOut
+  signInWithRedirect,
+  getRedirectResult,
+  signOut,
+  fetchSignInMethodsForEmail,
+  linkWithCredential,
+  EmailAuthProvider,
+  GoogleAuthProvider
 };
 
 export const db = getFirestore(app);

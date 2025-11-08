@@ -1,15 +1,19 @@
-import { Cloudinary } from 'cloudinary-core';
-
-const cl = new Cloudinary({
-  cloud_name: process.env.REACT_APP_CLOUDINARY_CLOUD_NAME,
-  secure: true
-});
-
 // Direct upload function without the React wrapper
 export const uploadToCloudinary = async (file, onProgress) => {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('upload_preset', process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET);
+  
+  // Vite uses import.meta.env instead of process.env
+  // Fallback to hardcoded values if environment variables are not set
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET 
+    || import.meta.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET
+    || 'ecoexpress_uploads'; // Fallback value
+  
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME 
+    || import.meta.env.REACT_APP_CLOUDINARY_CLOUD_NAME
+    || 'dnwqvjaru'; // Fallback value
+  
+  formData.append('upload_preset', uploadPreset);
   
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -42,19 +46,35 @@ export const uploadToCloudinary = async (file, onProgress) => {
       reject(new Error('Upload failed'));
     });
     
-    xhr.open('POST', `https://api.cloudinary.com/v1_1/${process.env.REACT_APP_CLOUDINARY_CLOUD_NAME}/image/upload`);
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`);
     xhr.send(formData);
   });
 };
 
-// Generate optimized image URL
+// Generate optimized image URL (without cloudinary-core dependency)
 export const getOptimizedImageUrl = (publicId, options = {}) => {
-  return cl.url(publicId, {
-    width: 800,
-    height: 600,
-    crop: 'fill',
-    quality: 'auto',
-    format: 'auto',
-    ...options
-  });
+  // Vite uses import.meta.env instead of process.env
+  // Fallback to hardcoded value if environment variables are not set
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME 
+    || import.meta.env.REACT_APP_CLOUDINARY_CLOUD_NAME
+    || 'dnwqvjaru'; // Fallback value
+  
+  const {
+    width = 800,
+    height = 600,
+    crop = 'fill',
+    quality = 'auto',
+    format = 'auto'
+  } = options;
+  
+  // Build Cloudinary URL manually
+  const transformations = [];
+  if (width) transformations.push(`w_${width}`);
+  if (height) transformations.push(`h_${height}`);
+  if (crop) transformations.push(`c_${crop}`);
+  if (quality) transformations.push(`q_${quality}`);
+  if (format) transformations.push(`f_${format}`);
+  
+  const transformationString = transformations.join(',');
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformationString}/${publicId}`;
 };

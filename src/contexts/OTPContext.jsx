@@ -91,7 +91,12 @@ const sendVerificationOTP = async (email, userData = {}) => {
       setError('');
       return true;
     } catch (error) {
-      setError('Failed to complete registration. Please try again.');
+      // Provide specific error message for email already in use
+      if (error.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. If you signed in with Google, please use "Sign in with Google" on the login page.');
+      } else {
+        setError(error.message || 'Failed to complete registration. Please try again.');
+      }
       console.error('Registration error:', error);
       return false;
     }

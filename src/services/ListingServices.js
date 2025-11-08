@@ -137,3 +137,22 @@ export const deleteListing = async (listingId) => {
     throw error;
   }
 };
+
+// Track listing view (increment view count)
+export const trackListingView = async (listingId) => {
+  try {
+    const listingRef = doc(db, 'listings', listingId);
+    const listingSnap = await getDoc(listingRef);
+    
+    if (listingSnap.exists()) {
+      const currentViews = listingSnap.data().views || 0;
+      await updateDoc(listingRef, {
+        views: currentViews + 1,
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error tracking listing view: ', error);
+    // Don't throw error - view tracking should not break the user experience
+  }
+};

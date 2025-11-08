@@ -1,22 +1,56 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-import { signOut } from "firebase/auth";
-import { auth } from "./Firebase";
+import { useWallet } from "./contexts/WalletContext";
+import { db } from "./Firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import logo from './assets/logo.png';
 import { useNavigate } from "react-router-dom";
+import WalletModal from "./components/WalletModal";
 
 function GuestNav() {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { currentUser } = useAuth();
+  const [hasHostActivity, setHasHostActivity] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const { currentUser, logout } = useAuth();
+  const { balance } = useWallet();
 
   const navLinks = [
-    { name: "Homes", path: "/" },
-    { name: "Experiences", path: "/experiences" },
-    { name: "Services", path: "/services" },
+    { name: "Homes", path: "/guest/homes" },
+    { name: "Experiences", path: "/guest/experiences" },
+    { name: "Services", path: "/guest/services" },
   ];
+
+  // Check if user has host activity (drafts or listings) - optimized with caching
+  useEffect(() => {
+    if (!currentUser) {
+      setHasHostActivity(false);
+      return;
+    }
+
+    // Use a single query with Promise.all for parallel execution
+    const checkHostActivity = async () => {
+      try {
+        // Execute both queries in parallel for faster results
+        const [listingsSnapshot, draftsSnapshot] = await Promise.all([
+          getDocs(query(collection(db, 'listings'), where('hostId', '==', currentUser.uid))),
+          getDocs(query(collection(db, 'drafts'), where('hostId', '==', currentUser.uid)))
+        ]);
+
+        // If user has any listings or drafts, they have host activity
+        setHasHostActivity(!listingsSnapshot.empty || !draftsSnapshot.empty);
+      } catch (error) {
+        console.error('Error checking host activity:', error);
+        setHasHostActivity(false);
+      }
+    };
+
+    // Set a timeout to prevent UI blocking - show button immediately, update if needed
+    const timeoutId = setTimeout(checkHostActivity, 100);
+    return () => clearTimeout(timeoutId);
+  }, [currentUser]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -32,11 +66,13 @@ function GuestNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logout();
       setIsUserMenuOpen(false);
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      // Still navigate to login on error
+      navigate('/login');
     }
   };
 
@@ -52,7 +88,8 @@ function GuestNav() {
   };
 
   return (
-    <nav className="bg-white text-gray-800 shadow-sm border-b border-gray-100 sticky top-0 z-50">
+    <>
+    <nav className="bg-white text-gray-800 shadow-sm border-b border-gray-100 sticky top-0 z-50 backdrop-blur-sm bg-white/95">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
           {/* Logo/Brand */}
@@ -60,7 +97,7 @@ function GuestNav() {
             <div className="w-10 h-10 rounded-lg bg-teal-500 flex items-center justify-center overflow-hidden">
               <img src={logo} alt="Eco Express Logo" className="w-full h-full object-cover" />
             </div>
-            <span className="text-xl font-semibold text-gray-900">EcoExpress</span>
+            <span className="text-xl font-semibold text-gray-900 tracking-tight">EcoExpress</span>
           </Link>
 
           {/* Center Navigation */}
@@ -78,12 +115,12 @@ function GuestNav() {
 
           {/* Right Section - Guest Navigation */}
           <div className="hidden md:flex items-center space-x-3">
-            {/* Become a Host Button */}
+            {/* Become a Host / Switch to Hosting Button */}
             <Link 
-              to="/host/onboarding" 
+              to={hasHostActivity ? "/host/dashboard" : "/host/onboarding"} 
               className="px-4 py-2 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:text-teal-600 hover:bg-gray-50"
             >
-              Become a Host
+              {hasHostActivity ? "Switch to Hosting" : "Become a Host"}
             </Link>
 
             {/* User Menu Dropdown */}
@@ -127,6 +164,26 @@ function GuestNav() {
                     </div>
                   </div>
 
+                  {/* My Wallet */}
+                  <button
+                    onClick={() => {
+                      setShowWalletModal(true);
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[#C8E6C9] bg-opacity-30 border-b border-gray-100 hover:bg-[#C8E6C9] hover:bg-opacity-40 transition-all duration-200 text-left"
+                  >
+                    <div className="flex items-center">
+                      <span className="text-2xl mr-3">💳</span>
+                      <div>
+                        <p className="text-xs text-gray-500">My Wallet</p>
+                        <p className="text-sm font-semibold text-[#4CAF50]">
+                          ₱{balance.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[#4CAF50]">→</span>
+                  </button>
+
                   {/* Clickable Menu Items */}
                   <div className="py-1">
                     <Link to="/profile" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setIsUserMenuOpen(false)}>
@@ -147,7 +204,7 @@ function GuestNav() {
                       <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                       </svg>
-                      Wishlist
+                      Favorites
                     </Link>
 
                     <Link to="/messages" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setIsUserMenuOpen(false)}>
@@ -155,6 +212,13 @@ function GuestNav() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                       </svg>
                       Messages
+                    </Link>
+
+                    <Link to="/reviews" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setIsUserMenuOpen(false)}>
+                      <svg className="w-4 h-4 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                      Reviews
                     </Link>
 
                     <Link to="/settings" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors" onClick={() => setIsUserMenuOpen(false)}>
@@ -200,8 +264,23 @@ function GuestNav() {
               ))}
               
               <div className="pt-4 border-t border-gray-100 space-y-2">
-                <Link to="/become-host" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
-                  Become a Host
+                {/* My Wallet - Mobile */}
+                <button
+                  onClick={() => {
+                    setShowWalletModal(true);
+                    setIsMenuOpen(false);
+                  }}
+                  className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block"
+                >
+                  💳 My Wallet: ₱{balance.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </button>
+                
+                <Link 
+                  to={hasHostActivity ? "/host/dashboard" : "/host/onboarding"} 
+                  className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" 
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {hasHostActivity ? "Switch to Hosting" : "Become a Host"}
                 </Link>
                 <Link to="/profile" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
                   Profile
@@ -210,10 +289,13 @@ function GuestNav() {
                   Trips
                 </Link>
                 <Link to="/wishlist" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
-                  Wishlist
+                  Favorites
                 </Link>
                 <Link to="/messages" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
                   Messages
+                </Link>
+                <Link to="/reviews" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
+                  Reviews
                 </Link>
                 <Link to="/settings" className="w-full text-gray-600 hover:text-teal-600 px-4 py-3 rounded-lg text-base font-medium text-left transition-colors block" onClick={() => setIsMenuOpen(false)}>
                   Settings
@@ -227,6 +309,14 @@ function GuestNav() {
         )}
       </div>
     </nav>
+
+    {/* Wallet Modal */}
+    <WalletModal 
+      isOpen={showWalletModal} 
+      onClose={() => setShowWalletModal(false)}
+      userType="guest"
+    />
+    </>
   );
 }
 

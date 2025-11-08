@@ -12,6 +12,8 @@
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@paypal/react-paypal-js": "^8.9.2",
+    "@react-pdf/renderer": "^4.3.1",
+    "@tailwindcss/line-clamp": "^0.4.4",
     "@tailwindcss/vite": "^4.1.14",
     "cloudinary": "^2.7.0",
     "emailjs-com": "^3.2.0",
@@ -19,8 +21,10 @@
     "leaflet": "^1.9.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-hot-toast": "^2.6.0",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.9.4",
+    "recharts": "^3.3.0",
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {

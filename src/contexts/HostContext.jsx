@@ -4,7 +4,8 @@ import {
   addDoc, 
   serverTimestamp,
   doc,
-  setDoc 
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../Firebase';
@@ -40,8 +41,13 @@ export const HostProvider = ({ children }) => {
 
   // Update host data
   const updateHostData = (newData) => {
-    setHostData(prev => ({ ...prev, ...newData }));
-    console.log('Host Data Updated:', { ...hostData, ...newData });
+    // Remove undefined values before updating
+    const cleanData = Object.fromEntries(
+      Object.entries(newData).filter(([_, value]) => value !== undefined)
+    );
+    setHostData(prev => ({ ...prev, ...cleanData }));
+    // Reduced logging - only log significant updates
+    // Uncomment for debugging: console.log('Host Data Updated:', cleanData);
   };
 
   // Clear host data
@@ -63,6 +69,59 @@ export const HostProvider = ({ children }) => {
       paymentVerified: false
     });
     console.log('Host Data Cleared');
+  };
+
+  // Load draft from Firestore
+  const loadDraft = async (draftId) => {
+    setLoading(true);
+    try {
+      if (!currentUser) {
+        throw new Error('You must be logged in to load a draft');
+      }
+
+      const draftRef = doc(db, 'drafts', draftId);
+      const draftSnap = await getDoc(draftRef);
+
+      if (!draftSnap.exists()) {
+        throw new Error('Draft not found');
+      }
+
+      const draftData = draftSnap.data();
+
+      // Verify this draft belongs to the current user
+      if (draftData.hostId !== currentUser.uid) {
+        throw new Error('You do not have permission to access this draft');
+      }
+
+      // Load the draft data into state
+      setHostData({
+        propertyType: draftData.propertyType || '',
+        currentStep: draftData.currentStep || 1,
+        homeDetails: draftData.homeDetails || null,
+        experienceDetails: draftData.experienceDetails || null,
+        serviceDetails: draftData.serviceDetails || null,
+        location: draftData.location || null,
+        pricing: draftData.pricing || null,
+        photos: draftData.photos || [],
+        policiesAccepted: draftData.policiesAccepted || null,
+        policyAcceptedAt: draftData.policyAcceptedAt || null,
+        subscriptionPlan: draftData.subscriptionPlan || null,
+        subscriptionStatus: draftData.subscriptionStatus || 'pending',
+        paypalSubscriptionId: draftData.paypalSubscriptionId || null,
+        paymentVerified: draftData.paymentVerified || false,
+        draftId: draftId // Store the draft ID so we can delete it when publishing
+      });
+
+      // Only log in development to reduce console spam - removed full object logging
+      // The toast notification in HostCreateListing is sufficient for user feedback
+
+      setLoading(false);
+      return draftData;
+    } catch (error) {
+      console.error('❌ Failed to load draft:', error);
+      setLoading(false);
+      throw error;
+    }
   };
 
   // Upload photo to Firebase Storage
@@ -96,8 +155,8 @@ export const HostProvider = ({ children }) => {
         throw new Error('You must be logged in to save a draft');
       }
 
+      // Build draft data, excluding undefined values
       const draftData = {
-        ...hostData,
         hostId: currentUser.uid,
         hostName: currentUser.displayName || currentUser.email,
         hostEmail: currentUser.email,
@@ -107,10 +166,52 @@ export const HostProvider = ({ children }) => {
         lastSaved: serverTimestamp()
       };
 
-      console.log('💾 Saving draft to Firebase...', draftData);
+      // Add property type if exists
+      if (hostData.propertyType) {
+        draftData.propertyType = hostData.propertyType;
+      }
+
+      // Add details based on property type
+      if (hostData.propertyType === 'home' && hostData.homeDetails) {
+        draftData.homeDetails = hostData.homeDetails;
+      } else if (hostData.propertyType === 'experience' && hostData.experienceDetails) {
+        draftData.experienceDetails = hostData.experienceDetails;
+      } else if (hostData.propertyType === 'service' && hostData.serviceDetails) {
+        draftData.serviceDetails = hostData.serviceDetails;
+      }
+
+      // Add location if exists
+      if (hostData.location && hostData.location.address) {
+        draftData.location = hostData.location;
+      }
+
+      // Add pricing if exists
+      if (hostData.pricing && hostData.pricing.basePrice) {
+        draftData.pricing = hostData.pricing;
+      }
+
+      // Add photos if exists
+      if (hostData.photos && hostData.photos.length > 0) {
+        draftData.photos = hostData.photos;
+      }
+
+      // Add current step
+      if (hostData.currentStep) {
+        draftData.currentStep = hostData.currentStep;
+      }
+
+      // Remove any undefined values
+      const cleanDraftData = Object.fromEntries(
+        Object.entries(draftData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log('💾 Saving draft to Firebase...');
 
       // Save to Firestore in a 'drafts' collection
-      const docRef = await addDoc(collection(db, 'drafts'), draftData);
+      const docRef = await addDoc(collection(db, 'drafts'), cleanDraftData);
+      
+      // Store the draft ID in hostData so we can delete it later when publishing
+      updateHostData({ draftId: docRef.id });
       
       console.log('✅ Draft saved successfully! ID:', docRef.id);
       return docRef.id;
@@ -144,7 +245,150 @@ export const HostProvider = ({ children }) => {
         throw new Error('Pricing information is required');
       }
 
-      // Prepare listing data for Firebase
+      // Get subscription plan from hostData or host profile
+      let subscriptionPlan = hostData.subscriptionPlan;
+      let subscriptionStatus = hostData.subscriptionStatus || 'active';
+      
+      // If not in hostData, try to get from host profile
+      if (!subscriptionPlan) {
+        try {
+          const hostDocRef = doc(db, 'hosts', currentUser.uid);
+          const hostDoc = await getDoc(hostDocRef);
+          if (hostDoc.exists()) {
+            const hostProfile = hostDoc.data();
+            subscriptionPlan = hostProfile.subscriptionPlan;
+            subscriptionStatus = hostProfile.subscriptionStatus || subscriptionStatus;
+          }
+        } catch (error) {
+          console.warn('Could not fetch subscription from host profile:', error);
+        }
+      }
+
+      // Calculate expiration date based on subscription plan
+      let expiresAt = null;
+      let subscriptionFeatures = [];
+      let subscriptionPlanId = null;
+      
+      if (subscriptionPlan) {
+        // Get plan ID (handle both object and string)
+        subscriptionPlanId = subscriptionPlan?.id || subscriptionPlan;
+        
+        // Subscription plan definitions with duration
+        const subscriptionPlans = [
+            {
+              id: 'starter',
+              postingDuration: 1,
+              postingDurationUnit: 'years',
+              features: [
+                '1 Year Listing Duration',
+                'Basic Performance Analytics',
+                'Standard Customer Support',
+                'Community Access',
+                'Easy Listing Management'
+              ]
+            },
+            {
+              id: 'basic',
+              postingDuration: 3,
+              postingDurationUnit: 'months',
+              features: [
+                '3 Months Listing Duration',
+                'Basic Performance Analytics',
+                'Standard Customer Support',
+                'Community Access',
+                'Easy Listing Management'
+              ]
+            },
+            {
+              id: 'pro',
+              postingDuration: 1,
+              postingDurationUnit: 'years',
+              features: [
+                '1 Year Listing Duration',
+                'Advanced Performance Analytics',
+                'Priority Customer Support',
+                'Featured Listing Badge',
+                'Enhanced Booking Management',
+                'Detailed Revenue Reports'
+              ]
+            },
+            {
+              id: 'professional',
+              postingDuration: 1,
+              postingDurationUnit: 'years',
+              features: [
+                '1 Year Listing Duration',
+                'Advanced Performance Analytics',
+                'Priority Customer Support',
+                'Featured Listing Badge',
+                'Enhanced Booking Management',
+                'Detailed Revenue Reports'
+              ]
+            },
+            {
+              id: 'elite',
+              postingDuration: 1,
+              postingDurationUnit: 'years',
+              features: [
+                '1 Year Listing Duration',
+                'Premium Analytics Dashboard',
+                '24/7 Priority Support',
+                'Advanced Marketing Tools',
+                'Revenue Optimization Insights',
+                'Priority Listing Boost'
+              ]
+            },
+            {
+              id: 'enterprise',
+              postingDuration: 3,
+              postingDurationUnit: 'years',
+              features: [
+                '3 Years Listing Duration',
+                'Premium Analytics Dashboard',
+                '24/7 Priority Support',
+                'Advanced Marketing Tools',
+                'Revenue Optimization Insights',
+                'Priority Listing Boost'
+              ]
+            }
+          ];
+          
+          const selectedPlan = subscriptionPlans.find(p => p.id === subscriptionPlanId);
+          
+          if (selectedPlan) {
+            subscriptionFeatures = selectedPlan.features;
+            
+            // Calculate expiration date
+            const now = new Date();
+            const expirationDate = new Date(now);
+            
+            if (selectedPlan.postingDurationUnit === 'years') {
+              expirationDate.setFullYear(now.getFullYear() + selectedPlan.postingDuration);
+            } else if (selectedPlan.postingDurationUnit === 'months') {
+              expirationDate.setMonth(now.getMonth() + selectedPlan.postingDuration);
+            } else if (selectedPlan.postingDurationUnit === 'days') {
+              expirationDate.setDate(now.getDate() + selectedPlan.postingDuration);
+            }
+            
+            expiresAt = expirationDate;
+          } else if (typeof subscriptionPlan === 'object' && subscriptionPlan.postingDuration) {
+            // If subscriptionPlan is an object with postingDuration, use it directly
+            const now = new Date();
+            const expirationDate = new Date(now);
+            
+            if (subscriptionPlan.postingDurationUnit === 'years') {
+              expirationDate.setFullYear(now.getFullYear() + subscriptionPlan.postingDuration);
+            } else if (subscriptionPlan.postingDurationUnit === 'months') {
+              expirationDate.setMonth(now.getMonth() + subscriptionPlan.postingDuration);
+            } else if (subscriptionPlan.postingDurationUnit === 'days') {
+              expirationDate.setDate(now.getDate() + subscriptionPlan.postingDuration);
+            }
+            
+            expiresAt = expirationDate;
+          }
+      }
+
+      // Prepare listing data for Firebase (only include defined values)
       const listingData = {
         // Basic info
         propertyType: hostData.propertyType,
@@ -169,7 +413,15 @@ export const HostProvider = ({ children }) => {
         hostId: currentUser.uid,
         hostName: currentUser.displayName || 'Host',
         hostEmail: currentUser.email,
-        hostPhotoURL: currentUser.photoURL,
+        hostPhotoURL: currentUser.photoURL || null,
+        
+        // Subscription info (only include if exists)
+        ...(subscriptionPlanId && { subscriptionPlan: subscriptionPlanId }),
+        ...(subscriptionStatus && { subscriptionStatus: subscriptionStatus }),
+        ...(subscriptionFeatures.length > 0 && { subscriptionFeatures: subscriptionFeatures }),
+        
+        // Expiration (only include if exists)
+        ...(expiresAt && { expiresAt: expiresAt }),
         
         // Listing status
         status: 'published',
@@ -192,10 +444,15 @@ export const HostProvider = ({ children }) => {
         searchKeywords: generateSearchKeywords()
       };
 
-      console.log('📤 Publishing listing to Firebase...', listingData);
+      // Remove any undefined values (Firestore doesn't allow undefined)
+      const cleanListingData = Object.fromEntries(
+        Object.entries(listingData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log('📤 Publishing listing to Firebase...', cleanListingData);
 
       // Save to Firestore
-      const docRef = await addDoc(collection(db, 'listings'), listingData);
+      const docRef = await addDoc(collection(db, 'listings'), cleanListingData);
       
       console.log('✅ Listing published successfully! ID:', docRef.id);
       return docRef.id;
@@ -313,6 +570,7 @@ export const HostProvider = ({ children }) => {
     publishListing,
     saveAsDraft, // ✅ Now this will work correctly
     uploadPhoto,
+    loadDraft, // ✅ New function to load drafts
     loading,
     createHostProfile
   };

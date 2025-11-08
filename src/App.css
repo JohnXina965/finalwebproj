@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Eco Express Nature Green Color Palette - Fresh & Natural */
+:root {
+  --nature-light: #C8E6C9;
+  --nature-sage: #4CAF50;
+  --nature-forest: #2E7D32;
+  --nature-deep: #1B5E20;
+}
+
 @keyframes gradient-shift {
   0% {
     background-position: 0% 50%;
@@ -9,6 +17,62 @@
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes imgAnimIn {
+  to {
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+  }
+}
+
+@keyframes imgAnimOut {
+  to {
+    left: -100%;
+  }
+}
+
+/* Photo Stream Layout Responsive Styles */
+@media (max-aspect-ratio: 1/1) {
+  .photo-stream li {
+    height: 30vh;
+  }
+}
+
+@media (max-height: 480px) {
+  .photo-stream li {
+    height: 80vh;
+  }
+}
+
+@media (max-aspect-ratio: 1/1) and (max-width: 480px) {
+  .photo-stream {
+    flex-direction: row;
+  }
+  
+  .photo-stream li {
+    height: auto;
+    width: 100%;
+  }
+  
+  .photo-stream li img {
+    width: 100%;
+    max-height: 75vh;
+    min-width: 0;
   }
 }
 
@@ -63,4 +127,192 @@
 .animate-multi-layer {
   animation: multi-layer 20s ease-in-out infinite;
   background-size: 400% 400%;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+@keyframes kenBurns {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.05) translate(-2%, 2%);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+@keyframes slideFade {
+  0% {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 200px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 1;
+    max-height: 200px;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out both;
+}
+
+.animate-fadeInRight {
+  animation: fadeInRight 0.4s ease-out both;
+}
+
+/* Enhanced Dropdown Styling */
+select {
+  padding-right: 2rem;
+}
+
+select option {
+  padding: 0.75rem 1rem;
+  background-color: white;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+select option:hover {
+  background-color: #f0fdfa;
+}
+
+select option:checked {
+  background-color: #4CAF50;
+  color: white;
+}
+
+/* Enhanced Date Input Styling */
+input[type="date"] {
+  color-scheme: light;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  filter: invert(0.5);
+  padding: 0.25rem;
+  margin-left: 0.25rem;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(0.3);
+}
+
+/* Price Range Slider Styles */
+.slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+
+.slider-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.25);
+  transition: all 0.2s ease;
+}
+
+.slider-thumb::-webkit-slider-thumb:hover {
+  background: #2E7D32;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.35);
+}
+
+.slider-thumb::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.25);
+  transition: all 0.2s ease;
+}
+
+.slider-thumb::-moz-range-thumb:hover {
+  background: #2E7D32;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.35);
 }
