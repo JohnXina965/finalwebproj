@@ -5,11 +5,15 @@ import {
   serverTimestamp,
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../Firebase';
 import { useAuth } from './AuthContext';
+import { canCreateListing, getSubscriptionPlan } from '../services/SubscriptionService';
 
 const HostContext = createContext();
 
@@ -248,6 +252,7 @@ export const HostProvider = ({ children }) => {
       // Get subscription plan from hostData or host profile
       let subscriptionPlan = hostData.subscriptionPlan;
       let subscriptionStatus = hostData.subscriptionStatus || 'active';
+      let additionalSlots = 0;
       
       // If not in hostData, try to get from host profile
       if (!subscriptionPlan) {
@@ -258,134 +263,107 @@ export const HostProvider = ({ children }) => {
             const hostProfile = hostDoc.data();
             subscriptionPlan = hostProfile.subscriptionPlan;
             subscriptionStatus = hostProfile.subscriptionStatus || subscriptionStatus;
+            additionalSlots = hostProfile.additionalListingSlots || 0;
           }
         } catch (error) {
           console.warn('Could not fetch subscription from host profile:', error);
         }
+      } else {
+        // Get additional slots from host profile if subscription plan is in hostData
+        try {
+          const hostDocRef = doc(db, 'hosts', currentUser.uid);
+          const hostDoc = await getDoc(hostDocRef);
+          if (hostDoc.exists()) {
+            const hostProfile = hostDoc.data();
+            additionalSlots = hostProfile.additionalListingSlots || 0;
+          }
+        } catch (error) {
+          console.warn('Could not fetch additional slots from host profile:', error);
+        }
+      }
+
+      // Check listing limit before publishing
+      const subscriptionPlanId = subscriptionPlan?.id || subscriptionPlan || 'basic';
+      
+      // Get current listing count
+      let currentListingCount = 0;
+      try {
+        const listingsQuery = query(
+          collection(db, 'listings'),
+          where('hostId', '==', currentUser.uid),
+          where('status', '==', 'published')
+        );
+        const listingsSnapshot = await getDocs(listingsQuery);
+        currentListingCount = listingsSnapshot.size;
+      } catch (error) {
+        // Fallback: try without status filter if index issue
+        console.warn('Error checking listing count with status filter, trying fallback:', error);
+        try {
+          const fallbackQuery = query(
+            collection(db, 'listings'),
+            where('hostId', '==', currentUser.uid)
+          );
+          const fallbackSnapshot = await getDocs(fallbackQuery);
+          // Filter client-side for published listings
+          currentListingCount = fallbackSnapshot.docs.filter(doc => {
+            const data = doc.data();
+            return data.status === 'published';
+          }).length;
+        } catch (fallbackError) {
+          console.error('Error checking listing count:', fallbackError);
+          // If we can't check, allow the listing creation (fail-safe)
+          currentListingCount = 0;
+        }
+      }
+
+      // Check if host can create more listings
+      const listingAvailability = canCreateListing(subscriptionPlanId, currentListingCount, additionalSlots);
+      
+      if (!listingAvailability.allowed) {
+        const plan = getSubscriptionPlan(subscriptionPlanId);
+        const limit = plan.listingLimit === -1 ? 'Unlimited' : (plan.listingLimit + additionalSlots);
+        throw new Error(`Listing limit reached! You have ${currentListingCount} / ${limit} listings. Please upgrade your subscription or purchase additional listing slots to create more listings.`);
       }
 
       // Calculate expiration date based on subscription plan
       let expiresAt = null;
       let subscriptionFeatures = [];
-      let subscriptionPlanId = null;
       
       if (subscriptionPlan) {
-        // Get plan ID (handle both object and string)
-        subscriptionPlanId = subscriptionPlan?.id || subscriptionPlan;
+        // Use SubscriptionService to get plan details
+        const selectedPlan = getSubscriptionPlan(subscriptionPlanId);
         
-        // Subscription plan definitions with duration
-        const subscriptionPlans = [
-            {
-              id: 'starter',
-              postingDuration: 1,
-              postingDurationUnit: 'years',
-              features: [
-                '1 Year Listing Duration',
-                'Basic Performance Analytics',
-                'Standard Customer Support',
-                'Community Access',
-                'Easy Listing Management'
-              ]
-            },
-            {
-              id: 'basic',
-              postingDuration: 3,
-              postingDurationUnit: 'months',
-              features: [
-                '3 Months Listing Duration',
-                'Basic Performance Analytics',
-                'Standard Customer Support',
-                'Community Access',
-                'Easy Listing Management'
-              ]
-            },
-            {
-              id: 'pro',
-              postingDuration: 1,
-              postingDurationUnit: 'years',
-              features: [
-                '1 Year Listing Duration',
-                'Advanced Performance Analytics',
-                'Priority Customer Support',
-                'Featured Listing Badge',
-                'Enhanced Booking Management',
-                'Detailed Revenue Reports'
-              ]
-            },
-            {
-              id: 'professional',
-              postingDuration: 1,
-              postingDurationUnit: 'years',
-              features: [
-                '1 Year Listing Duration',
-                'Advanced Performance Analytics',
-                'Priority Customer Support',
-                'Featured Listing Badge',
-                'Enhanced Booking Management',
-                'Detailed Revenue Reports'
-              ]
-            },
-            {
-              id: 'elite',
-              postingDuration: 1,
-              postingDurationUnit: 'years',
-              features: [
-                '1 Year Listing Duration',
-                'Premium Analytics Dashboard',
-                '24/7 Priority Support',
-                'Advanced Marketing Tools',
-                'Revenue Optimization Insights',
-                'Priority Listing Boost'
-              ]
-            },
-            {
-              id: 'enterprise',
-              postingDuration: 3,
-              postingDurationUnit: 'years',
-              features: [
-                '3 Years Listing Duration',
-                'Premium Analytics Dashboard',
-                '24/7 Priority Support',
-                'Advanced Marketing Tools',
-                'Revenue Optimization Insights',
-                'Priority Listing Boost'
-              ]
-            }
-          ];
+        if (selectedPlan) {
+          subscriptionFeatures = selectedPlan.features;
           
-          const selectedPlan = subscriptionPlans.find(p => p.id === subscriptionPlanId);
+          // Calculate expiration date
+          const now = new Date();
+          const expirationDate = new Date(now);
           
-          if (selectedPlan) {
-            subscriptionFeatures = selectedPlan.features;
-            
-            // Calculate expiration date
-            const now = new Date();
-            const expirationDate = new Date(now);
-            
-            if (selectedPlan.postingDurationUnit === 'years') {
-              expirationDate.setFullYear(now.getFullYear() + selectedPlan.postingDuration);
-            } else if (selectedPlan.postingDurationUnit === 'months') {
-              expirationDate.setMonth(now.getMonth() + selectedPlan.postingDuration);
-            } else if (selectedPlan.postingDurationUnit === 'days') {
-              expirationDate.setDate(now.getDate() + selectedPlan.postingDuration);
-            }
-            
-            expiresAt = expirationDate;
-          } else if (typeof subscriptionPlan === 'object' && subscriptionPlan.postingDuration) {
-            // If subscriptionPlan is an object with postingDuration, use it directly
-            const now = new Date();
-            const expirationDate = new Date(now);
-            
-            if (subscriptionPlan.postingDurationUnit === 'years') {
-              expirationDate.setFullYear(now.getFullYear() + subscriptionPlan.postingDuration);
-            } else if (subscriptionPlan.postingDurationUnit === 'months') {
-              expirationDate.setMonth(now.getMonth() + subscriptionPlan.postingDuration);
-            } else if (subscriptionPlan.postingDurationUnit === 'days') {
-              expirationDate.setDate(now.getDate() + subscriptionPlan.postingDuration);
-            }
-            
-            expiresAt = expirationDate;
+          if (selectedPlan.postingDurationUnit === 'years') {
+            expirationDate.setFullYear(now.getFullYear() + selectedPlan.postingDuration);
+          } else if (selectedPlan.postingDurationUnit === 'months') {
+            expirationDate.setMonth(now.getMonth() + selectedPlan.postingDuration);
+          } else if (selectedPlan.postingDurationUnit === 'days') {
+            expirationDate.setDate(now.getDate() + selectedPlan.postingDuration);
           }
+          
+          expiresAt = expirationDate;
+        } else if (typeof subscriptionPlan === 'object' && subscriptionPlan.postingDuration) {
+          // If subscriptionPlan is an object with postingDuration, use it directly
+          const now = new Date();
+          const expirationDate = new Date(now);
+          
+          if (subscriptionPlan.postingDurationUnit === 'years') {
+            expirationDate.setFullYear(now.getFullYear() + subscriptionPlan.postingDuration);
+          } else if (subscriptionPlan.postingDurationUnit === 'months') {
+            expirationDate.setMonth(now.getMonth() + subscriptionPlan.postingDuration);
+          } else if (subscriptionPlan.postingDurationUnit === 'days') {
+            expirationDate.setDate(now.getDate() + subscriptionPlan.postingDuration);
+          }
+          
+          expiresAt = expirationDate;
+        }
       }
 
       // Prepare listing data for Firebase (only include defined values)

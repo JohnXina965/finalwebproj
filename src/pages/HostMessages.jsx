@@ -16,6 +16,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { db } from '../Firebase';
+import { uploadToCloudinary } from '../utils/Cloudinary';
 
 function HostMessages() {
   const { currentUser } = useAuth();
@@ -26,20 +27,15 @@ function HostMessages() {
   const [conversationMessages, setConversationMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showOfferModal, setShowOfferModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [offerDetails, setOfferDetails] = useState({
-    price: '',
-    discount: '',
-    checkIn: '',
-    checkOut: '',
-    guests: '',
-    message: ''
-  });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -212,15 +208,64 @@ function HostMessages() {
     }
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if ((!newMessage.trim() && !selectedImage) || !selectedConversation || sending || uploadingImage) return;
 
     const conversation = conversations.find(c => c.id === selectedConversation.id);
     if (!conversation) return;
 
     try {
       setSending(true);
+      let imageUrl = null;
+
+      // Upload image if selected
+      if (selectedImage) {
+        setUploadingImage(true);
+        try {
+          const uploadResult = await uploadToCloudinary(selectedImage, (progress) => {
+            // Optional: You can show upload progress if needed
+            console.log(`Upload progress: ${progress}%`);
+          });
+          imageUrl = uploadResult.url;
+          setUploadingImage(false);
+        } catch (uploadError) {
+          console.error('Error uploading image:', uploadError);
+          toast.error('Failed to upload image. Please try again.');
+          setUploadingImage(false);
+          setSending(false);
+          return;
+        }
+      }
+
       await addDoc(collection(db, 'messages'), {
         hostId: currentUser.uid,
         hostName: currentUser.displayName || currentUser.email,
@@ -231,59 +276,22 @@ function HostMessages() {
         guestPhoto: conversation.guestPhoto,
         listingId: conversation.listingId,
         listingTitle: conversation.listingTitle,
-        content: newMessage.trim(),
+        content: newMessage.trim() || '',
+        imageUrl: imageUrl || null,
         senderId: currentUser.uid,
         senderType: 'host',
-        type: 'text',
+        type: imageUrl ? 'image' : 'text',
         read: false,
         timestamp: serverTimestamp()
       });
 
-      await updateOrCreateConversation(conversation, newMessage.trim(), 'text');
+      await updateOrCreateConversation(conversation, imageUrl ? 'Sent an image' : newMessage.trim(), imageUrl ? 'image' : 'text');
       setNewMessage('');
+      removeImage();
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const sendOffer = async () => {
-    if (!selectedConversation || !offerDetails.price) return;
-
-    const conversation = conversations.find(c => c.id === selectedConversation.id);
-    if (!conversation) return;
-
-    try {
-      setSending(true);
-      await addDoc(collection(db, 'messages'), {
-        hostId: currentUser.uid,
-        hostName: currentUser.displayName || currentUser.email,
-        guestId: conversation.guestId,
-        guestName: conversation.guestName,
-        listingId: conversation.listingId,
-        listingTitle: conversation.listingTitle,
-        type: 'offer',
-        senderId: currentUser.uid,
-        senderType: 'host',
-        offerPrice: offerDetails.price,
-        offerDiscount: offerDetails.discount || '',
-        offerCheckIn: offerDetails.checkIn || '',
-        offerCheckOut: offerDetails.checkOut || '',
-        offerGuests: offerDetails.guests || '',
-        offerMessage: offerDetails.message || '',
-        offerStatus: 'pending',
-        read: false,
-        timestamp: serverTimestamp()
-      });
-
-      await updateOrCreateConversation(conversation, 'Sent an offer', 'offer');
-      setShowOfferModal(false);
-      setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-    } catch (error) {
-      console.error('Error sending offer:', error);
-      toast.error('Failed to send offer. Please try again.');
+      setUploadingImage(false);
     } finally {
       setSending(false);
     }
@@ -324,42 +332,6 @@ function HostMessages() {
     }
   };
 
-  const handleOfferResponse = async (messageId, response) => {
-    try {
-      const messageRef = doc(db, 'messages', messageId);
-      await updateDoc(messageRef, {
-        offerStatus: response,
-        offerResponseTime: serverTimestamp()
-      });
-
-      const messageDoc = await getDoc(messageRef);
-      const messageData = messageDoc.data();
-      
-      await addDoc(collection(db, 'messages'), {
-        hostId: currentUser.uid,
-        hostName: currentUser.displayName || currentUser.email,
-        guestId: messageData.guestId,
-        guestName: messageData.guestName,
-        listingId: messageData.listingId,
-        listingTitle: messageData.listingTitle,
-        content: response === 'accepted' ? 'I accept your offer! ✓' : 'I decline your offer.',
-        senderId: currentUser.uid,
-        senderType: 'host',
-        type: 'text',
-        read: false,
-        timestamp: serverTimestamp()
-      });
-
-      await updateOrCreateConversation(
-        selectedConversation,
-        response === 'accepted' ? 'Accepted your offer ✓' : 'Declined your offer',
-        'text'
-      );
-    } catch (error) {
-      console.error('Error responding to offer:', error);
-      toast.error('Failed to respond. Please try again.');
-    }
-  };
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -382,6 +354,7 @@ function HostMessages() {
 
   const filteredConversations = conversations.filter(conv => 
     conv.guestName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.guestEmail?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     conv.listingTitle?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -448,27 +421,27 @@ function HostMessages() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 pt-20 pb-8">
-      <div className="max-w-7xl mx-auto px-4 h-[calc(100vh-120px)]">
-        <div className="bg-white rounded-3xl shadow-2xl h-full flex overflow-hidden border border-gray-200">
+    <div className="fixed inset-0 top-16 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="w-full h-full flex overflow-hidden">
+        <div className="bg-white h-full w-full flex overflow-hidden">
           {/* Conversations Sidebar */}
-          <div className="w-full md:w-96 border-r border-gray-200 flex flex-col bg-gradient-to-b from-gray-50 to-white">
-            <div className="p-6 border-b border-gray-200 bg-white" data-aos="fade-down">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Messages</h2>
-                <span className="bg-teal-100 text-teal-700 text-xs px-3 py-1 rounded-full font-bold">
+          <div className="w-full md:w-80 lg:w-96 border-r border-gray-200 flex flex-col bg-gradient-to-b from-gray-50 to-white flex-shrink-0">
+            <div className="p-4 border-b border-gray-200 bg-white" data-aos="fade-down">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl font-bold text-gray-900">Messages</h2>
+                <span className="bg-teal-100 text-teal-700 text-xs px-2.5 py-1 rounded-full font-bold">
                   {conversations.length}
                 </span>
               </div>
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search conversations..."
+                  placeholder="Search by guest name, email, or listing..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
+                  className="w-full px-3 py-2.5 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all border border-transparent focus:border-teal-500"
                 />
-                <svg className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute right-3 top-3.5 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -485,7 +458,7 @@ function HostMessages() {
                   <button
                     key={conv.id}
                     onClick={() => setSelectedConversation(conv)}
-                    className={`w-full p-4 text-left hover:bg-gray-50 transition-all duration-200 border-b border-gray-100 ${
+                    className={`w-full p-3 text-left hover:bg-gray-50 transition-all duration-200 border-b border-gray-100 ${
                       selectedConversation?.id === conv.id 
                         ? 'bg-gradient-to-r from-teal-50 to-emerald-50 border-l-4 border-l-teal-600 shadow-sm' 
                         : ''
@@ -493,29 +466,29 @@ function HostMessages() {
                     data-aos="fade-right"
                     data-aos-delay={index * 50}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-white">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg ring-2 ring-white">
                         {conv.guestPhoto ? (
-                          <img src={conv.guestPhoto} alt={conv.guestName} className="w-14 h-14 rounded-full object-cover" />
+                          <img src={conv.guestPhoto} alt={conv.guestName} className="w-12 h-12 rounded-full object-cover" />
                         ) : (
-                          <span className="text-white font-bold text-xl">
+                          <span className="text-white font-bold text-lg">
                             {conv.guestName?.charAt(0)?.toUpperCase() || 'G'}
                           </span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-bold text-gray-900 truncate">{conv.guestName}</h4>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <h4 className="font-semibold text-gray-900 truncate text-sm">{conv.guestName}</h4>
                           {conv.unreadCount > 0 && (
-                            <span className="bg-teal-600 text-white text-xs px-2 py-1 rounded-full font-bold min-w-[24px] text-center">
+                            <span className="bg-teal-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold min-w-[20px] text-center">
                               {conv.unreadCount}
                             </span>
                           )}
                         </div>
                         {conv.listingTitle && (
-                          <p className="text-xs text-teal-600 mb-1 truncate font-medium">{conv.listingTitle}</p>
+                          <p className="text-xs text-teal-600 mb-0.5 truncate font-medium">{conv.listingTitle}</p>
                         )}
-                        <p className="text-sm text-gray-600 truncate mb-1">{conv.lastMessage || 'No messages'}</p>
+                        <p className="text-xs text-gray-600 truncate mb-0.5">{conv.lastMessage || 'No messages'}</p>
                         {conv.lastMessageTime && (
                           <p className="text-xs text-gray-400">{formatTime(conv.lastMessageTime)}</p>
                         )}
@@ -529,31 +502,31 @@ function HostMessages() {
 
           {/* Messages Area */}
           {selectedConversation ? (
-            <div className="flex-1 flex flex-col bg-white">
+            <div className="flex-1 flex flex-col bg-white min-w-0">
               {/* Header */}
-              <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-lg ring-2 ring-white">
+              <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50 flex items-center justify-between shadow-sm flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-lg ring-2 ring-white flex-shrink-0">
                     {selectedConversation.guestPhoto ? (
-                      <img src={selectedConversation.guestPhoto} alt={selectedConversation.guestName} className="w-14 h-14 rounded-full object-cover" />
+                      <img src={selectedConversation.guestPhoto} alt={selectedConversation.guestName} className="w-12 h-12 rounded-full object-cover" />
                     ) : (
-                      <span className="text-white font-bold text-xl">
+                      <span className="text-white font-bold text-lg">
                         {selectedConversation.guestName?.charAt(0)?.toUpperCase() || 'G'}
                       </span>
                     )}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{selectedConversation.guestName}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-bold text-gray-900 text-base truncate">{selectedConversation.guestName}</h3>
                     {selectedConversation.listingTitle && (
-                      <p className="text-sm text-gray-500">{selectedConversation.listingTitle}</p>
+                      <p className="text-xs text-gray-500 truncate">{selectedConversation.listingTitle}</p>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {selectedConversation.listingId && (
                     <Link
                       to={`/listing/${selectedConversation.listingId}`}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition-all text-sm flex items-center gap-2 shadow-md hover:shadow-lg"
+                      className="px-3 py-1.5 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-all text-xs flex items-center gap-1.5 shadow-md hover:shadow-lg whitespace-nowrap"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -562,22 +535,13 @@ function HostMessages() {
                       View Listing
                     </Link>
                   )}
-                  <button
-                    onClick={() => setShowOfferModal(true)}
-                    className="px-4 py-2 border-2 border-teal-600 text-teal-600 rounded-xl font-semibold hover:bg-teal-50 transition-all text-sm flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Send Offer
-                  </button>
                 </div>
               </div>
 
               {/* Messages */}
               <div 
                 ref={messagesContainerRef}
-                className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-gray-50 via-white to-gray-50"
+                className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-50 via-white to-gray-50 min-h-0"
                 style={{ scrollBehavior: 'smooth' }}
               >
                 {conversationMessages.map((msg, index) => {
@@ -586,129 +550,48 @@ function HostMessages() {
                   const showAvatar = !prevMsg || prevMsg.senderId !== msg.senderId || 
                     (msg.timestamp?.getTime() - prevMsg.timestamp?.getTime()) > 300000;
 
-                  if (msg.type === 'offer') {
-                    return (
-                      <div key={msg.id} className={`flex ${isHost ? 'justify-end' : 'justify-start'} mb-6`}>
-                        <div className={`max-w-md ${isHost ? 'items-end' : 'items-start'} flex flex-col`}>
-                          <div className={`rounded-3xl p-6 shadow-xl ${isHost 
-                            ? 'bg-gradient-to-br from-teal-500 to-emerald-600 text-white' 
-                            : 'bg-white border-2 border-teal-200 text-gray-900'
-                          }`}>
-                            <div className="flex items-center gap-3 mb-4">
-                              <div className={`p-3 rounded-2xl ${isHost ? 'bg-white/20' : 'bg-teal-100'}`}>
-                                <svg className={`w-6 h-6 ${isHost ? 'text-white' : 'text-teal-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <p className="font-bold text-lg">Special Offer</p>
-                                <p className={`text-xs ${isHost ? 'opacity-80' : 'text-gray-500'}`}>
-                                  {isHost ? 'You sent' : 'from'} {isHost ? 'to' : ''} {isHost ? selectedConversation.guestName : msg.hostName}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            <div className="space-y-3 mb-4 bg-white/10 rounded-xl p-4">
-                              <div className="flex justify-between items-center">
-                                <span className={`text-sm ${isHost ? 'opacity-90' : 'text-gray-600'}`}>Price:</span>
-                                <span className="font-bold text-xl">₱{parseFloat(msg.offerPrice || 0).toLocaleString()}</span>
-                              </div>
-                              {msg.offerDiscount && (
-                                <div className="flex justify-between items-center">
-                                  <span className={`text-sm ${isHost ? 'opacity-90' : 'text-gray-600'}`}>Discount:</span>
-                                  <span className="font-bold text-green-500">{msg.offerDiscount}% off</span>
-                                </div>
-                              )}
-                              {(msg.offerCheckIn || msg.offerCheckOut) && (
-                                <div className="flex justify-between items-center">
-                                  <span className={`text-sm ${isHost ? 'opacity-90' : 'text-gray-600'}`}>Dates:</span>
-                                  <span className="font-semibold">
-                                    {msg.offerCheckIn ? formatDate(msg.offerCheckIn) : 'Flexible'} - {msg.offerCheckOut ? formatDate(msg.offerCheckOut) : 'Flexible'}
-                                  </span>
-                                </div>
-                              )}
-                              {msg.offerGuests && (
-                                <div className="flex justify-between items-center">
-                                  <span className={`text-sm ${isHost ? 'opacity-90' : 'text-gray-600'}`}>Guests:</span>
-                                  <span className="font-semibold">{msg.offerGuests}</span>
-                                </div>
-                              )}
-                              {msg.offerMessage && (
-                                <div className="pt-3 border-t border-white/20 mt-3">
-                                  <p className={`text-sm ${isHost ? 'opacity-90' : 'text-gray-700'}`}>{msg.offerMessage}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {!isHost && msg.offerStatus === 'pending' && (
-                              <div className="flex gap-3 mt-4 pt-4 border-t border-white/20">
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'accepted')}
-                                  className="flex-1 bg-white text-teal-600 py-3 px-5 rounded-xl font-bold hover:bg-teal-50 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                                >
-                                  ✓ Accept
-                                </button>
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'declined')}
-                                  className="flex-1 bg-white/20 text-white py-3 px-5 rounded-xl font-bold hover:bg-white/30 transition-all"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )}
-                            {msg.offerStatus === 'accepted' && (
-                              <div className="mt-4 pt-4 border-t border-white/20">
-                                <p className={`text-sm font-bold ${isHost ? 'text-green-200' : 'text-green-600'}`}>
-                                  ✓ Offer Accepted
-                                </p>
-                              </div>
-                            )}
-                            {msg.offerStatus === 'declined' && (
-                              <div className="mt-4 pt-4 border-t border-white/20">
-                                <p className={`text-sm ${isHost ? 'opacity-75' : 'text-gray-500'}`}>Offer Declined</p>
-                              </div>
-                            )}
-                          </div>
-                          {msg.timestamp && (
-                            <p className={`text-xs mt-2 px-2 ${isHost ? 'text-right text-gray-500' : 'text-left text-gray-400'}`}>
-                              {formatTime(msg.timestamp)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isHost ? 'justify-end' : 'justify-start'} items-end gap-2 group`}
+                      className={`flex ${isHost ? 'justify-end' : 'justify-start'} items-end gap-2 group mb-2`}
                     >
                       {!isHost && showAvatar && (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-white">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-white">
                           {selectedConversation.guestPhoto ? (
-                            <img src={selectedConversation.guestPhoto} alt={selectedConversation.guestName} className="w-10 h-10 rounded-full object-cover" />
+                            <img src={selectedConversation.guestPhoto} alt={selectedConversation.guestName} className="w-8 h-8 rounded-full object-cover" />
                           ) : (
-                            <span className="text-white text-sm font-bold">
+                            <span className="text-white text-xs font-bold">
                               {selectedConversation.guestName?.charAt(0)?.toUpperCase() || 'G'}
                             </span>
                           )}
                         </div>
                       )}
-                      {isHost && <div className="w-10"></div>}
-                      <div className={`max-w-xs lg:max-w-md px-5 py-3 rounded-3xl shadow-md transition-all duration-200 group-hover:shadow-lg ${
+                      {isHost && <div className="w-8"></div>}
+                      <div className={`max-w-[85%] md:max-w-[75%] px-3 py-2 rounded-2xl transition-all duration-200 group-hover:shadow-md ${
                         isHost 
-                          ? 'bg-gradient-to-br from-teal-500 to-emerald-600 text-white rounded-tr-sm' 
-                          : 'bg-white text-gray-900 border border-gray-200 rounded-tl-sm'
+                          ? 'bg-[#FF6B35] text-white rounded-tr-sm' 
+                          : 'bg-gray-100 text-gray-900 rounded-tl-sm'
                       }`}>
                         {!isHost && showAvatar && (
-                          <p className="text-xs font-bold mb-1.5 text-gray-600">{msg.guestName}</p>
+                          <p className="text-xs font-semibold mb-1 text-gray-600">{msg.guestName}</p>
                         )}
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                        <div className={`flex items-center justify-end gap-1 mt-2 ${isHost ? 'text-teal-100' : 'text-gray-400'}`}>
+                        {msg.imageUrl && (
+                          <div className="mb-2 rounded-lg overflow-hidden max-w-full">
+                            <img 
+                              src={msg.imageUrl} 
+                              alt="Shared image" 
+                              className="max-w-full h-auto max-h-96 rounded-lg cursor-pointer object-contain"
+                              onClick={() => window.open(msg.imageUrl, '_blank')}
+                            />
+                          </div>
+                        )}
+                        {msg.content && (
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
+                        )}
+                        <div className={`flex items-center gap-1 mt-1.5 ${isHost ? 'text-white/80 justify-end' : 'text-gray-500 justify-start'}`}>
                           {msg.timestamp && (
                             <p className="text-xs">
-                              {formatTime(msg.timestamp)}
+                              {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                             </p>
                           )}
                           {/* Seen indicator for host messages */}
@@ -724,13 +607,13 @@ function HostMessages() {
                           )}
                         </div>
                       </div>
-                      {!isHost && <div className="w-10"></div>}
+                      {!isHost && <div className="w-8"></div>}
                       {isHost && showAvatar && (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-white">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md ring-2 ring-white">
                           {currentUser.photoURL ? (
-                            <img src={currentUser.photoURL} alt="You" className="w-10 h-10 rounded-full object-cover" />
+                            <img src={currentUser.photoURL} alt="You" className="w-8 h-8 rounded-full object-cover" />
                           ) : (
-                            <span className="text-white text-sm font-bold">
+                            <span className="text-white text-xs font-bold">
                               {currentUser.displayName?.charAt(0)?.toUpperCase() || currentUser.email?.charAt(0)?.toUpperCase() || 'H'}
                             </span>
                           )}
@@ -743,27 +626,61 @@ function HostMessages() {
               </div>
 
               {/* Message Input */}
-              <form onSubmit={sendMessage} className="p-6 border-t border-gray-200 bg-white">
-                <div className="flex gap-3">
+              <form onSubmit={sendMessage} className="p-3 border-t border-gray-200 bg-white flex-shrink-0">
+                {imagePreview && (
+                  <div className="mb-2 relative inline-block">
+                    <img src={imagePreview} alt="Preview" className="max-w-xs max-h-48 h-auto rounded-lg border-2 border-gray-300 object-contain" />
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2 items-end">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+                    disabled={uploadingImage}
+                    title="Send image"
+                  >
+                    {uploadingImage ? (
+                      <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-1 px-5 py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all bg-gray-50 focus:bg-white"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] transition-all bg-gray-50 focus:bg-white text-sm"
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim() || sending}
-                    className="px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-2xl font-bold hover:from-teal-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+                    disabled={(!newMessage.trim() && !selectedImage) || sending || uploadingImage}
+                    className="p-2.5 bg-[#FF6B35] text-white rounded-full hover:bg-[#e55a2b] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                    title="Send message"
                   >
-                    {sending ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Sending...</span>
-                      </div>
+                    {sending || uploadingImage ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     )}
@@ -772,125 +689,16 @@ function HostMessages() {
               </form>
             </div>
           ) : (
-            <div className="flex-1 items-center justify-center hidden md:flex">
+            <div className="flex-1 items-center justify-center hidden md:flex min-w-0">
               <div className="text-center text-gray-500">
-                <div className="text-8xl mb-6">💬</div>
-                <p className="text-2xl font-bold mb-2">Select a conversation</p>
+                <div className="text-6xl mb-4">💬</div>
+                <p className="text-xl font-bold mb-2">Select a conversation</p>
                 <p className="text-sm">Choose a conversation from the list to start messaging</p>
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {/* Send Offer Modal */}
-      {showOfferModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-gray-900">Send Special Offer</h3>
-                <button
-                  onClick={() => setShowOfferModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Offer Price (₱)</label>
-                <input
-                  type="number"
-                  value={offerDetails.price}
-                  onChange={(e) => setOfferDetails({...offerDetails, price: e.target.value})}
-                  placeholder="Enter your offer price"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Check-in Date</label>
-                  <input
-                    type="date"
-                    value={offerDetails.checkIn}
-                    onChange={(e) => setOfferDetails({...offerDetails, checkIn: e.target.value})}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Check-out Date <span className="text-gray-400 font-normal text-xs">(Optional)</span></label>
-                  <input
-                    type="date"
-                    value={offerDetails.checkOut}
-                    onChange={(e) => setOfferDetails({...offerDetails, checkOut: e.target.value})}
-                    min={offerDetails.checkIn || new Date().toISOString().split('T')[0]}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Guests</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={offerDetails.guests}
-                    onChange={(e) => setOfferDetails({...offerDetails, guests: e.target.value})}
-                    placeholder="Guests"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Discount (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={offerDetails.discount}
-                    onChange={(e) => setOfferDetails({...offerDetails, discount: e.target.value})}
-                    placeholder="Optional"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Message (Optional)</label>
-                <textarea
-                  value={offerDetails.message}
-                  onChange={(e) => setOfferDetails({...offerDetails, message: e.target.value})}
-                  placeholder="Add a personal message with your offer..."
-                  rows="4"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowOfferModal(false);
-                  setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-                }}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendOffer}
-                disabled={!offerDetails.price || sending}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold hover:from-teal-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-              >
-                {sending ? 'Sending...' : 'Send Offer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

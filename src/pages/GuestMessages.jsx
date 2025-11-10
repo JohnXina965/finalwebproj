@@ -16,6 +16,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { db } from '../Firebase';
+import { uploadToCloudinary } from '../utils/Cloudinary';
 import { createBooking } from '../services/BookingService';
 
 function GuestMessages() {
@@ -27,27 +28,19 @@ function GuestMessages() {
   const [conversationMessages, setConversationMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [showSendOfferModal, setShowSendOfferModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hostSearchResults, setHostSearchResults] = useState([]);
   const [searchingHosts, setSearchingHosts] = useState(false);
   const [showHostSearch, setShowHostSearch] = useState(false);
-  const [completingBooking, setCompletingBooking] = useState(null);
-  const [offerDetails, setOfferDetails] = useState({
-    price: '',
-    discount: '',
-    checkIn: '',
-    checkOut: '',
-    guests: '',
-    message: ''
-  });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [listingData, setListingData] = useState(null);
-  const [offerSummary, setOfferSummary] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -87,33 +80,6 @@ function GuestMessages() {
     }
   };
 
-  const calculateOfferSummary = () => {
-    if (!offerDetails.price || !listingData) return null;
-
-    const offerPrice = parseFloat(offerDetails.price) || 0;
-    const originalPrice = listingData.pricing?.basePrice || listingData.pricing?.pricePerNight || 0;
-    const discount = offerDetails.discount ? parseFloat(offerDetails.discount) : 0;
-    const nights = offerDetails.checkIn && offerDetails.checkOut 
-      ? Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))
-      : 1;
-    
-    const savings = originalPrice * nights - offerPrice;
-    const savingsPercent = originalPrice > 0 ? ((savings / (originalPrice * nights)) * 100).toFixed(1) : 0;
-
-    return {
-      offerPrice,
-      originalPrice: originalPrice * nights,
-      savings,
-      savingsPercent,
-      nights,
-      discountPercent: discount
-    };
-  };
-
-  useEffect(() => {
-    const summary = calculateOfferSummary();
-    setOfferSummary(summary);
-  }, [offerDetails, listingData]);
 
   // Close search dropdown when clicking outside
   useEffect(() => {
@@ -374,15 +340,64 @@ function GuestMessages() {
     }
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        return;
+      }
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || sending) return;
+    if ((!newMessage.trim() && !selectedImage) || !selectedConversation || sending || uploadingImage) return;
 
     const conversation = conversations.find(c => c.id === selectedConversation.id);
     if (!conversation) return;
 
     try {
       setSending(true);
+      let imageUrl = null;
+
+      // Upload image if selected
+      if (selectedImage) {
+        setUploadingImage(true);
+        try {
+          const uploadResult = await uploadToCloudinary(selectedImage, (progress) => {
+            // Optional: You can show upload progress if needed
+            console.log(`Upload progress: ${progress}%`);
+          });
+          imageUrl = uploadResult.url;
+          setUploadingImage(false);
+        } catch (uploadError) {
+          console.error('Error uploading image:', uploadError);
+          toast.error('Failed to upload image. Please try again.');
+          setUploadingImage(false);
+          setSending(false);
+          return;
+        }
+      }
+
       await addDoc(collection(db, 'messages'), {
         hostId: conversation.hostId,
         hostName: conversation.hostName,
@@ -393,81 +408,28 @@ function GuestMessages() {
         guestPhoto: currentUser.photoURL,
         listingId: conversation.listingId,
         listingTitle: conversation.listingTitle,
-        content: newMessage.trim(),
+        content: newMessage.trim() || '',
+        imageUrl: imageUrl || null,
         senderId: currentUser.uid,
         senderType: 'guest',
-        type: 'text',
+        type: imageUrl ? 'image' : 'text',
         read: false,
         timestamp: serverTimestamp()
       });
 
-      await updateOrCreateConversation(conversation, newMessage.trim(), 'text');
+      await updateOrCreateConversation(conversation, imageUrl ? 'Sent an image' : newMessage.trim(), imageUrl ? 'image' : 'text');
       setNewMessage('');
+      removeImage();
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
+      setUploadingImage(false);
     } finally {
       setSending(false);
     }
   };
 
-  const sendOffer = async () => {
-    if (!selectedConversation || !offerDetails.price) return;
-
-    const conversation = conversations.find(c => c.id === selectedConversation.id);
-    if (!conversation) return;
-
-    // Validation
-    if (!offerDetails.checkIn) {
-      toast.error('Please select a check-in date');
-      return;
-    }
-
-    if (offerDetails.checkOut && new Date(offerDetails.checkOut) <= new Date(offerDetails.checkIn)) {
-      toast.error('Check-out date must be after check-in date');
-      return;
-    }
-
-    const offerPrice = parseFloat(offerDetails.price);
-    if (isNaN(offerPrice) || offerPrice <= 0) {
-      toast.error('Please enter a valid offer price');
-      return;
-    }
-
-    try {
-      setSending(true);
-      await addDoc(collection(db, 'messages'), {
-        hostId: conversation.hostId,
-        hostName: conversation.hostName,
-        guestId: currentUser.uid,
-        guestName: currentUser.displayName || currentUser.email,
-        listingId: conversation.listingId,
-        listingTitle: conversation.listingTitle,
-        type: 'offer',
-        senderId: currentUser.uid,
-        senderType: 'guest',
-        offerPrice: offerDetails.price,
-        offerDiscount: offerDetails.discount || '',
-        offerCheckIn: offerDetails.checkIn || '',
-        offerCheckOut: offerDetails.checkOut || '',
-        offerGuests: offerDetails.guests || '',
-        offerMessage: offerDetails.message || '',
-        offerStatus: 'pending',
-        read: false,
-        timestamp: serverTimestamp()
-      });
-
-      await updateOrCreateConversation(conversation, 'Sent an offer', 'offer');
-      setShowSendOfferModal(false);
-      setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-      setOfferSummary(null);
-    } catch (error) {
-      console.error('Error sending offer:', error);
-      toast.error('Failed to send offer. Please try again.');
-    } finally {
-      setSending(false);
-    }
-  };
+  // Offer functionality removed - messaging only
 
   const updateOrCreateConversation = async (conversation, lastMessage, type) => {
     try {
@@ -503,75 +465,7 @@ function GuestMessages() {
     }
   };
 
-  const handleCompleteBooking = async (offerMessage) => {
-    if (!offerMessage || !selectedConversation) return;
-
-    try {
-      setCompletingBooking(offerMessage.id);
-
-      // Get listing details
-      const listingDoc = await getDoc(doc(db, 'listings', offerMessage.listingId));
-      if (!listingDoc.exists()) {
-        toast.error('Listing not found');
-        return;
-      }
-
-      const listing = listingDoc.data();
-      const offerPrice = parseFloat(offerMessage.offerPrice) || 0;
-      const { calculateServiceFee } = require('../services/ServiceFeeService');
-      const serviceFee = calculateServiceFee(offerPrice);
-      const totalAmount = offerPrice + serviceFee;
-
-      // Redirect to listing page to complete PayPal payment
-      toast.info('Redirecting to listing page to complete payment via PayPal...');
-      navigate(`/listing/${offerMessage.listingId}?offer=true&price=${offerPrice}&checkIn=${offerMessage.offerCheckIn || ''}&checkOut=${offerMessage.offerCheckOut || ''}&guests=${offerMessage.offerGuests || 1}`);
-      setCompletingBooking(null);
-      
-      // Note: The actual booking will be created on the listing detail page after PayPal payment
-      // This function now just redirects to the listing page for payment
-    } catch (error) {
-      console.error('Error completing booking:', error);
-      toast.error(`Failed to redirect: ${error.message}`);
-      setCompletingBooking(null);
-    }
-  };
-
-  const handleOfferResponse = async (messageId, response) => {
-    try {
-      const messageRef = doc(db, 'messages', messageId);
-      await updateDoc(messageRef, {
-        offerStatus: response,
-        offerResponseTime: serverTimestamp()
-      });
-
-      const messageDoc = await getDoc(messageRef);
-      const messageData = messageDoc.data();
-      
-      await addDoc(collection(db, 'messages'), {
-        hostId: messageData.hostId,
-        hostName: messageData.hostName,
-        guestId: currentUser.uid,
-        guestName: currentUser.displayName || currentUser.email,
-        listingId: messageData.listingId,
-        listingTitle: messageData.listingTitle,
-        content: response === 'accepted' ? 'I accept your offer! ✓' : 'I decline your offer.',
-        senderId: currentUser.uid,
-        senderType: 'guest',
-        type: 'text',
-        read: false,
-        timestamp: serverTimestamp()
-      });
-
-      await updateOrCreateConversation(
-        selectedConversation,
-        response === 'accepted' ? 'Accepted your offer ✓' : 'Declined your offer',
-        'text'
-      );
-    } catch (error) {
-      console.error('Error responding to offer:', error);
-      toast.error('Failed to respond. Please try again.');
-    }
-  };
+  // Offer functionality removed - messaging only
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -863,15 +757,6 @@ function GuestMessages() {
                       <span className="hidden sm:inline">View</span>
                     </Link>
                   )}
-                  <button
-                    onClick={() => setShowSendOfferModal(true)}
-                    className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all text-xs flex items-center gap-1"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="hidden sm:inline">Offer</span>
-                  </button>
                 </div>
               </div>
 
@@ -887,163 +772,13 @@ function GuestMessages() {
                   const showAvatar = !prevMsg || prevMsg.senderId !== msg.senderId || 
                     (msg.timestamp?.getTime() - prevMsg.timestamp?.getTime()) > 300000;
 
+                  // Skip offer messages - offer functionality removed
                   if (msg.type === 'offer') {
-                    return (
-                      <div key={msg.id} className={`flex ${isGuest ? 'justify-end' : 'justify-start'} mb-4 md:mb-6 animate-fadeIn`} style={{ animation: `fadeInUp 0.3s ease-out ${index * 0.02}s both` }}>
-                        <div className={`max-w-[90%] sm:max-w-md ${isGuest ? 'items-end' : 'items-start'} flex flex-col`}>
-                          <div className={`rounded-xl md:rounded-2xl p-4 md:p-5 shadow-md border ${isGuest 
-                            ? 'bg-black text-white border-black' 
-                            : 'bg-white border-gray-200 text-gray-900'
-                          }`}>
-                            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-                              <div className={`p-2 md:p-2.5 rounded-lg ${isGuest ? 'bg-white/20' : 'bg-gray-100'}`}>
-                                <svg className={`w-4 h-4 md:w-5 md:h-5 ${isGuest ? 'text-white' : 'text-gray-700'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-sm md:text-base truncate">Special Offer</p>
-                                <p className={`text-xs ${isGuest ? 'opacity-70' : 'text-gray-500'} truncate`}>
-                                  {isGuest ? 'You sent' : 'from'} {isGuest ? 'to' : ''} {isGuest ? selectedConversation.hostName : msg.guestName}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            <div className={`space-y-2 md:space-y-2.5 mb-3 md:mb-4 rounded-lg p-3 md:p-4 ${isGuest ? 'bg-white/10' : 'bg-gray-50'}`}>
-                              <div className="flex justify-between items-center">
-                                <span className={`text-xs md:text-sm ${isGuest ? 'opacity-90' : 'text-gray-600'}`}>Price:</span>
-                                <span className="font-bold text-lg md:text-xl">₱{parseFloat(msg.offerPrice || 0).toLocaleString()}</span>
-                              </div>
-                              {msg.offerDiscount && (
-                                <div className="flex justify-between items-center">
-                                  <span className={`text-xs md:text-sm ${isGuest ? 'opacity-90' : 'text-gray-600'}`}>Discount:</span>
-                                  <span className="font-bold text-sm md:text-base text-green-500">{msg.offerDiscount}% off</span>
-                                </div>
-                              )}
-                              {(msg.offerCheckIn || msg.offerCheckOut) && (
-                                <div className="flex justify-between items-center flex-wrap gap-1">
-                                  <span className={`text-xs md:text-sm ${isGuest ? 'opacity-90' : 'text-gray-600'}`}>Dates:</span>
-                                  <span className="font-semibold text-xs md:text-sm text-right">
-                                    {msg.offerCheckIn ? formatDate(msg.offerCheckIn) : 'Flexible'} - {msg.offerCheckOut ? formatDate(msg.offerCheckOut) : 'Flexible'}
-                                  </span>
-                                </div>
-                              )}
-                              {msg.offerGuests && (
-                                <div className="flex justify-between items-center">
-                                  <span className={`text-xs md:text-sm ${isGuest ? 'opacity-90' : 'text-gray-600'}`}>Guests:</span>
-                                  <span className="font-semibold text-xs md:text-sm">{msg.offerGuests}</span>
-                                </div>
-                              )}
-                              {msg.offerMessage && (
-                                <div className="pt-2 md:pt-3 border-t border-white/20 mt-2 md:mt-3">
-                                  <p className={`text-xs md:text-sm ${isGuest ? 'opacity-90' : 'text-gray-700'} break-words`}>{msg.offerMessage}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Show Accept/Decline buttons for pending offers */}
-                            {/* Host can accept guest's offer */}
-                            {!isGuest && msg.offerStatus === 'pending' && msg.senderType === 'guest' && (
-                              <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-4 border-t border-gray-200">
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'accepted')}
-                                  className="flex-1 bg-black text-white py-2.5 px-4 rounded-lg font-medium hover:bg-gray-800 transition-all text-sm"
-                                >
-                                  ✓ Accept
-                                </button>
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'declined')}
-                                  className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-medium hover:bg-gray-50 transition-all text-sm"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )}
-                            {/* Guest can accept host's offer */}
-                            {isGuest && msg.offerStatus === 'pending' && msg.senderType === 'host' && (
-                              <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-4 border-t border-gray-200">
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'accepted')}
-                                  className="flex-1 bg-black text-white py-2.5 px-4 rounded-lg font-medium hover:bg-gray-800 transition-all text-sm"
-                                >
-                                  ✓ Accept Offer
-                                </button>
-                                <button
-                                  onClick={() => handleOfferResponse(msg.id, 'declined')}
-                                  className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-medium hover:bg-gray-50 transition-all text-sm"
-                                >
-                                  Decline
-                                </button>
-                              </div>
-                            )}
-                            {msg.offerStatus === 'accepted' && (
-                              <div className="mt-4 pt-4 border-t border-gray-200">
-                                <p className={`text-xs md:text-sm font-medium mb-3 ${isGuest ? 'text-green-300' : 'text-green-600'}`}>
-                                  ✓ Offer Accepted
-                                </p>
-                                {/* Show Complete Booking button to guest when they accept a host's offer OR when host accepts guest's offer */}
-                                {isGuest && (
-                                  <div className="space-y-3">
-                                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                      <div className="flex justify-between items-center text-xs md:text-sm mb-2">
-                                        <span className="text-gray-600">Offer Price:</span>
-                                        <span className="font-semibold">₱{parseFloat(msg.offerPrice || 0).toLocaleString()}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center text-xs md:text-sm mb-2">
-                                        <span className="text-gray-600">Service Fee (10%):</span>
-                                        <span className="font-semibold">₱{((parseFloat(msg.offerPrice || 0) * 0.1)).toLocaleString()}</span>
-                                      </div>
-                                      <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                        <span className="font-semibold text-gray-900 text-xs md:text-sm">Total to Pay:</span>
-                                        <span className="font-bold text-base md:text-lg text-gray-900">₱{(parseFloat(msg.offerPrice || 0) * 1.1).toLocaleString()}</span>
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={() => handleCompleteBooking(msg)}
-                                      disabled={completingBooking === msg.id}
-                                      className="w-full bg-black text-white py-2.5 px-4 rounded-lg font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black flex items-center justify-center gap-2 text-sm"
-                                    >
-                                      {completingBooking === msg.id ? (
-                                        <>
-                                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                          Completing Booking...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                          </svg>
-                                          Complete Booking & Pay
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                )}
-                                {!isGuest && (
-                                  <p className="text-xs text-gray-500 mt-2">
-                                    Waiting for guest to complete booking and payment...
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            {msg.offerStatus === 'declined' && (
-                              <div className="mt-4 pt-4 border-t border-gray-200">
-                                <p className={`text-sm ${isGuest ? 'opacity-70' : 'text-gray-500'}`}>Offer Declined</p>
-                              </div>
-                            )}
-                          </div>
-                          {msg.timestamp && (
-                            <p className={`text-xs mt-2 px-2 ${isGuest ? 'text-right text-gray-500' : 'text-left text-gray-400'}`}>
-                              {formatTime(msg.timestamp)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
+                    return null;
                   }
 
                   // Check if message is a listing card (has listingId and type is not offer)
-                  const isListingCard = msg.listingId && msg.type !== 'offer' && !msg.content;
+                  const isListingCard = msg.listingId && msg.type !== 'offer' && !msg.content && !msg.imageUrl;
                   
                   if (isListingCard) {
                     return (
@@ -1071,35 +806,72 @@ function GuestMessages() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isGuest ? 'justify-end' : 'justify-start'} mb-4 group`}
+                      className={`flex ${isGuest ? 'justify-end' : 'justify-start'} items-end gap-2 group mb-2`}
                     >
-                      <div className={`max-w-[70%] ${isGuest ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
-                        <div className={`px-4 py-2 rounded-2xl ${
-                          isGuest 
-                            ? 'bg-[#FF6B35] text-white' 
-                            : 'bg-gray-100 text-gray-900'
-                        }`}>
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
+                      {!isGuest && showAvatar && (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          {selectedConversation.hostPhoto ? (
+                            <img src={selectedConversation.hostPhoto} alt={selectedConversation.hostName} className="w-10 h-10 rounded-full object-cover" />
+                          ) : (
+                            <span className="text-gray-600 text-sm font-semibold">
+                              {selectedConversation.hostName?.charAt(0)?.toUpperCase() || 'H'}
+                            </span>
+                          )}
                         </div>
-                        <div className={`flex items-center gap-1 mt-1 ${isGuest ? 'flex-row-reverse' : ''}`}>
+                      )}
+                      {isGuest && <div className="w-10"></div>}
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl transition-all duration-200 group-hover:shadow-md ${
+                        isGuest 
+                          ? 'bg-[#FF6B35] text-white rounded-tr-sm' 
+                          : 'bg-gray-100 text-gray-900 rounded-tl-sm'
+                      }`}>
+                        {!isGuest && showAvatar && (
+                          <p className="text-xs font-semibold mb-1 text-gray-600">{msg.hostName}</p>
+                        )}
+                        {msg.imageUrl && (
+                          <div className="mb-2 rounded-lg overflow-hidden">
+                            <img 
+                              src={msg.imageUrl} 
+                              alt="Shared image" 
+                              className="max-w-full h-auto rounded-lg cursor-pointer"
+                              onClick={() => window.open(msg.imageUrl, '_blank')}
+                            />
+                          </div>
+                        )}
+                        {msg.content && (
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
+                        )}
+                        <div className={`flex items-center gap-1 mt-1.5 ${isGuest ? 'text-white/80 justify-end' : 'text-gray-500 justify-start'}`}>
                           {msg.timestamp && (
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs">
                               {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                             </p>
                           )}
                           {/* Seen indicator for guest messages */}
                           {isGuest && msg.read && (
-                            <div className="flex items-center gap-1" title={msg.readAt ? `Seen ${formatTime(msg.readAt)}` : 'Seen'}>
-                              <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <div className="flex items-center gap-1 ml-1" title={msg.readAt ? `Seen ${formatTime(msg.readAt)}` : 'Seen'}>
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>
                               {msg.readAt && (
-                                <span className="text-xs text-gray-500">Seen</span>
+                                <span className="text-xs opacity-75">Seen</span>
                               )}
                             </div>
                           )}
                         </div>
                       </div>
+                      {!isGuest && <div className="w-10"></div>}
+                      {isGuest && showAvatar && (
+                        <div className="w-10 h-10 rounded-full bg-[#FF6B35] flex items-center justify-center flex-shrink-0">
+                          {currentUser.photoURL ? (
+                            <img src={currentUser.photoURL} alt="You" className="w-10 h-10 rounded-full object-cover" />
+                          ) : (
+                            <span className="text-white text-sm font-bold">
+                              {currentUser.displayName?.charAt(0)?.toUpperCase() || currentUser.email?.charAt(0)?.toUpperCase() || 'G'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1108,23 +880,54 @@ function GuestMessages() {
 
               {/* Message Input */}
               <form onSubmit={sendMessage} className="p-4 border-t border-gray-200 bg-white sticky bottom-0">
-                <div className="flex items-center gap-2">
+                {imagePreview && (
+                  <div className="mb-3 relative inline-block">
+                    <img src={imagePreview} alt="Preview" className="max-w-xs h-auto rounded-lg border-2 border-gray-300" />
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2 items-end">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-3 text-gray-600 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+                    disabled={uploadingImage}
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </button>
                   <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
-                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4CAF50] focus:border-[#4CAF50] transition-all bg-white text-sm placeholder:text-gray-400"
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#FF6B35] focus:border-[#FF6B35] transition-all bg-gray-50 focus:bg-white text-sm placeholder:text-gray-400"
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim() || sending}
-                    className="w-10 h-10 bg-[#4CAF50] text-white rounded-full font-medium hover:bg-[#2E7D32] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#4CAF50] flex items-center justify-center flex-shrink-0"
+                    disabled={(!newMessage.trim() && !selectedImage) || sending || uploadingImage}
+                    className="p-3 bg-[#FF6B35] text-white rounded-full hover:bg-[#e55a2b] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                   >
-                    {sending ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    {sending || uploadingImage ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     )}
@@ -1161,274 +964,6 @@ function GuestMessages() {
         </div>
       </div>
 
-      {/* Send Offer Modal */}
-      {showSendOfferModal && selectedConversation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4 animate-fadeIn" onClick={() => {
-          setShowSendOfferModal(false);
-          setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-          setOfferSummary(null);
-        }}>
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 md:p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1 mr-2">
-                  <h3 className="text-lg md:text-xl font-semibold text-gray-900 truncate">Make an Offer</h3>
-                  {selectedConversation.listingTitle && (
-                    <p className="text-xs md:text-sm text-gray-500 mt-1 truncate">{selectedConversation.listingTitle}</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => {
-                    setShowSendOfferModal(false);
-                    setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-                    setOfferSummary(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100 flex-shrink-0"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="p-4 md:p-6 space-y-4 md:space-y-5">
-              {/* Listing Info */}
-              {listingData && (
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-600">Original Price</span>
-                    {listingData.pricing?.basePrice && (
-                      <span className="text-lg font-semibold text-gray-900">
-                        ₱{parseFloat(listingData.pricing.basePrice).toLocaleString()}
-                        {listingData.propertyType === 'home' && '/night'}
-                      </span>
-                    )}
-                  </div>
-                  {offerDetails.checkIn && offerDetails.checkOut && listingData.pricing?.basePrice && (
-                    <div className="text-xs text-gray-500">
-                      {Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))} nights × ₱{parseFloat(listingData.pricing.basePrice).toLocaleString()} = ₱{(parseFloat(listingData.pricing.basePrice) * Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))).toLocaleString()}
-                    </div>
-                  )}
-                  {selectedConversation.listingId && (
-                    <Link
-                      to={`/listing/${selectedConversation.listingId}`}
-                      className="text-xs text-gray-600 hover:text-black mt-2 inline-flex items-center gap-1 underline"
-                      target="_blank"
-                    >
-                      View full listing details
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </Link>
-                  )}
-                </div>
-              )}
-
-              {/* Offer Price */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Your Offer Price (₱) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">₱</span>
-                  <input
-                    type="number"
-                    value={offerDetails.price}
-                    onChange={(e) => setOfferDetails({...offerDetails, price: e.target.value})}
-                    placeholder="Enter your offer price"
-                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all"
-                    required
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                {offerSummary && offerSummary.savings > 0 && (
-                  <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
-                    <span>💰</span> You're saving ₱{offerSummary.savings.toLocaleString()} ({offerSummary.savingsPercent}%)
-                  </p>
-                )}
-                {listingData && listingData.pricing?.basePrice && !offerDetails.price && (
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-gray-500">Quick fill:</span>
-                    <button
-                      onClick={() => {
-                        const nights = offerDetails.checkIn && offerDetails.checkOut 
-                          ? Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))
-                          : 1;
-                        const suggestedPrice = listingData.pricing.basePrice * nights;
-                        setOfferDetails({...offerDetails, price: suggestedPrice.toString()});
-                      }}
-                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors"
-                    >
-                      Full price
-                    </button>
-                    <button
-                      onClick={() => {
-                        const nights = offerDetails.checkIn && offerDetails.checkOut 
-                          ? Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))
-                          : 1;
-                        const suggestedPrice = Math.round(listingData.pricing.basePrice * nights * 0.9);
-                        setOfferDetails({...offerDetails, price: suggestedPrice.toString()});
-                      }}
-                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors"
-                    >
-                      10% off
-                    </button>
-                    <button
-                      onClick={() => {
-                        const nights = offerDetails.checkIn && offerDetails.checkOut 
-                          ? Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))
-                          : 1;
-                        const suggestedPrice = Math.round(listingData.pricing.basePrice * nights * 0.85);
-                        setOfferDetails({...offerDetails, price: suggestedPrice.toString()});
-                      }}
-                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 transition-colors"
-                    >
-                      15% off
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Check-in Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={offerDetails.checkIn}
-                    onChange={(e) => setOfferDetails({...offerDetails, checkIn: e.target.value})}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 md:px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
-                    required
-                  />
-                  {offerDetails.checkIn && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(offerDetails.checkIn).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">
-                    Check-out Date <span className="text-gray-400 font-normal text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={offerDetails.checkOut}
-                    onChange={(e) => setOfferDetails({...offerDetails, checkOut: e.target.value})}
-                    min={offerDetails.checkIn || new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 md:px-4 py-2.5 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all text-sm"
-                  />
-                  {offerDetails.checkOut && (
-                    <div className="mt-1">
-                      <p className="text-xs text-gray-500">
-                        {new Date(offerDetails.checkOut).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </p>
-                      {offerDetails.checkIn && (
-                        <p className="text-xs text-gray-600 font-medium mt-0.5">
-                          {Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24))} {Math.ceil((new Date(offerDetails.checkOut) - new Date(offerDetails.checkIn)) / (1000 * 60 * 60 * 24)) === 1 ? 'night' : 'nights'}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Guests & Discount */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Number of Guests</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={offerDetails.guests}
-                    onChange={(e) => setOfferDetails({...offerDetails, guests: e.target.value})}
-                    placeholder="Guests"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Discount (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={offerDetails.discount}
-                    onChange={(e) => setOfferDetails({...offerDetails, discount: e.target.value})}
-                    placeholder="Optional"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Message */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">Message to Host</label>
-                <textarea
-                  value={offerDetails.message}
-                  onChange={(e) => setOfferDetails({...offerDetails, message: e.target.value})}
-                  placeholder="Add a personal message with your offer..."
-                  rows="4"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-black transition-all resize-none"
-                />
-              </div>
-
-              {/* Offer Summary */}
-              {offerSummary && offerDetails.price && (
-                <div className="bg-black text-white rounded-lg p-4">
-                  <h4 className="font-semibold mb-3">Offer Summary</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="opacity-80">Your Offer:</span>
-                      <span className="font-semibold">₱{offerSummary.offerPrice.toLocaleString()}</span>
-                    </div>
-                    {offerSummary.originalPrice > 0 && (
-                      <div className="flex justify-between">
-                        <span className="opacity-80">Original Price:</span>
-                        <span className="line-through opacity-60">₱{offerSummary.originalPrice.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {offerSummary.savings > 0 && (
-                      <div className="flex justify-between pt-2 border-t border-white/20">
-                        <span className="opacity-80">You Save:</span>
-                        <span className="font-semibold text-green-300">₱{offerSummary.savings.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="p-4 md:p-5 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row gap-2 md:gap-3">
-              <button
-                onClick={() => {
-                  setShowSendOfferModal(false);
-                  setOfferDetails({ price: '', discount: '', checkIn: '', checkOut: '', guests: '', message: '' });
-                  setOfferSummary(null);
-                }}
-                className="flex-1 px-4 md:px-5 py-2 md:py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-white transition-all text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={sendOffer}
-                disabled={!offerDetails.price || !offerDetails.checkIn || sending}
-                className="flex-1 px-4 md:px-5 py-2 md:py-2.5 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black text-sm"
-              >
-                {sending ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Sending...
-                  </span>
-                ) : (
-                  'Send Offer'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

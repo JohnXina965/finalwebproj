@@ -114,10 +114,20 @@ export const AuthProvider = ({ children }) => {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
-  // Logout function - redirects to login page
+  // Logout function - redirects to login page and syncs across tabs
   const logout = async () => {
     try {
+      // Broadcast logout event to other tabs BEFORE signing out
+      const logoutTimestamp = Date.now().toString();
+      localStorage.setItem('ecoexpress_logout', logoutTimestamp);
+      
       await signOut(auth);
+      
+      // Remove logout event after a delay to allow other tabs to detect it
+      setTimeout(() => {
+        localStorage.removeItem('ecoexpress_logout');
+      }, 1000);
+      
       // Store redirect preference before logout
       const wasHostMode = window.location.pathname.startsWith('/host');
       if (wasHostMode) {
@@ -125,10 +135,22 @@ export const AuthProvider = ({ children }) => {
       } else {
         localStorage.setItem('ecoexpress_redirect_mode', 'guest');
       }
-      // Redirect will be handled by App.jsx navigation logic
+      
+      // Clear any sensitive data
+      localStorage.removeItem('ee_favorites_homes');
+      localStorage.removeItem('ee_favorites_experiences');
+      localStorage.removeItem('ee_favorites_services');
+      
+      // Use replace instead of navigate to prevent back button navigation
+      window.history.replaceState(null, '', '/login');
+      window.location.replace('/login');
+      
       return true;
     } catch (error) {
       console.error('Logout error:', error);
+      // Still redirect even if signOut fails
+      window.history.replaceState(null, '', '/login');
+      window.location.replace('/login');
       throw error;
     }
   };
@@ -250,12 +272,53 @@ export const AuthProvider = ({ children }) => {
           console.error('Error creating user document on auth state change:', error);
           // Don't block auth flow if Firestore fails
         }
+      } else {
+        // User logged out - check if we need to redirect
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login' && 
+            currentPath !== '/signup' &&
+            !currentPath.startsWith('/admin') &&
+            !currentPath.startsWith('/listing')) {
+          // Prevent back navigation by replacing history
+          window.history.replaceState(null, '', '/login');
+          // Use setTimeout to ensure state is updated before redirect
+          setTimeout(() => {
+            window.location.replace('/login');
+          }, 100);
+        }
       }
       
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Listen for logout events from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'ecoexpress_logout' && e.newValue) {
+        // Another tab logged out - sign out this tab too
+        if (auth.currentUser) {
+          signOut(auth).then(() => {
+            window.history.replaceState(null, '', '/login');
+            setTimeout(() => {
+              window.location.replace('/login');
+            }, 100);
+          }).catch((error) => {
+            console.error('Error signing out from storage event:', error);
+            // Still redirect
+            window.history.replaceState(null, '', '/login');
+            setTimeout(() => {
+              window.location.replace('/login');
+            }, 100);
+          });
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Alias signOut to logout (for HostNav compatibility)

@@ -15,12 +15,19 @@ import L from 'leaflet';
 import { createBooking } from '../services/BookingService';
 
 // Fix for default marker icon in React-Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+// Create a custom icon instance
+const defaultIcon = new L.Icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
+
+// Set default icon
+L.Marker.prototype.options.icon = defaultIcon;
 
 const ListingDetail = () => {
   const { id } = useParams();
@@ -53,6 +60,7 @@ const ListingDetail = () => {
   const [blockedDates, setBlockedDates] = useState([]);
   const [existingBookings, setExistingBookings] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [hostInfo, setHostInfo] = useState({ points: 0, tier: null, hostingDuration: null, loading: true });
 
   // Load listing
   useEffect(() => {
@@ -95,6 +103,117 @@ const ListingDetail = () => {
       fetchListing();
     }
   }, [id, currentUser]);
+
+  // Load host information (points, tier, hosting duration)
+  useEffect(() => {
+    const loadHostInfo = async () => {
+      if (!listing || !listing.hostId) return;
+
+      try {
+        setHostInfo(prev => ({ ...prev, loading: true }));
+
+        // Get host points
+        const hostPointsRef = doc(db, 'hostPoints', listing.hostId);
+        const hostPointsSnap = await getDoc(hostPointsRef);
+        let totalPoints = 0;
+
+        if (hostPointsSnap.exists()) {
+          totalPoints = hostPointsSnap.data().totalPoints || 0;
+        } else {
+          // Calculate points from bookings and listings if hostPoints document doesn't exist
+          try {
+            const bookingsQuery = query(
+              collection(db, 'bookings'),
+              where('hostId', '==', listing.hostId),
+              where('status', '==', 'completed')
+            );
+            const bookingsSnapshot = await getDocs(bookingsQuery);
+            const completedBookings = bookingsSnapshot.size;
+            
+            const listingsQuery = query(
+              collection(db, 'listings'),
+              where('hostId', '==', listing.hostId)
+            );
+            const listingsSnapshot = await getDocs(listingsQuery);
+            const activeListings = listingsSnapshot.size;
+
+            totalPoints = completedBookings * 10 + activeListings * 50;
+          } catch (err) {
+            console.error('Error calculating points:', err);
+          }
+        }
+
+        // Get tier
+        const getCurrentTier = (points) => {
+          if (points >= 50000) return { name: 'Radiant', icon: '💎', color: 'text-purple-600' };
+          if (points >= 30000) return { name: 'Immortal', icon: '👑', color: 'text-red-600' };
+          if (points >= 20000) return { name: 'Diamond', icon: '💠', color: 'text-cyan-600' };
+          if (points >= 10000) return { name: 'Platinum', icon: '🔷', color: 'text-gray-600' };
+          if (points >= 5000) return { name: 'Gold', icon: '🥇', color: 'text-yellow-600' };
+          if (points >= 2000) return { name: 'Silver', icon: '🥈', color: 'text-gray-500' };
+          if (points >= 500) return { name: 'Bronze', icon: '🥉', color: 'text-orange-600' };
+          return { name: 'Iron', icon: '⚙️', color: 'text-gray-600' };
+        };
+
+        // Get first listing date to calculate hosting duration
+        // Query all listings for this host and filter client-side to avoid index requirements
+        const listingsQuery = query(
+          collection(db, 'listings'),
+          where('hostId', '==', listing.hostId)
+        );
+        const listingsSnapshot = await getDocs(listingsQuery);
+        
+        let firstListingDate = null;
+        listingsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          // Only consider published or draft listings
+          if (data.status === 'published' || data.status === 'draft') {
+            const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : 
+              (data.createdAt?.seconds ? new Date(data.createdAt.seconds * 1000) : null);
+            if (createdAt && (!firstListingDate || createdAt < firstListingDate)) {
+              firstListingDate = createdAt;
+            }
+          }
+        });
+
+        // Calculate hosting duration
+        let hostingDuration = null;
+        if (firstListingDate) {
+          const now = new Date();
+          const diffTime = Math.abs(now - firstListingDate);
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          const diffYears = Math.floor(diffDays / 365);
+          const diffMonths = Math.floor((diffDays % 365) / 30);
+          
+          if (diffYears > 0) {
+            hostingDuration = `${diffYears} ${diffYears === 1 ? 'year' : 'years'} hosting`;
+          } else if (diffMonths > 0) {
+            hostingDuration = `${diffMonths} ${diffMonths === 1 ? 'month' : 'months'} hosting`;
+          } else if (diffDays > 0) {
+            hostingDuration = `${diffDays} ${diffDays === 1 ? 'day' : 'days'} hosting`;
+          } else {
+            hostingDuration = 'New host';
+          }
+        } else {
+          hostingDuration = 'New host';
+        }
+
+        setHostInfo({
+          points: totalPoints,
+          tier: getCurrentTier(totalPoints),
+          hostingDuration,
+          loading: false
+        });
+      } catch (error) {
+        console.error('Error loading host info:', error);
+        setHostInfo(prev => ({ ...prev, loading: false, hostingDuration: 'New host' }));
+      }
+    };
+
+    if (listing?.hostId) {
+      loadHostInfo();
+    }
+  }, [listing?.hostId]);
 
   // Load blocked dates and existing bookings for the listing
   useEffect(() => {
@@ -148,7 +267,7 @@ const ListingDetail = () => {
     }
   }, [listing]);
 
-  // Load reviews
+  // Load reviews with real guest information
   useEffect(() => {
     if (!id) return;
 
@@ -158,16 +277,44 @@ const ListingDetail = () => {
       where('listingId', '==', id)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const reviewsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt?.seconds * 1000 || 0);
-        return {
-          id: doc.id,
-          ...data,
-          createdAt
-        };
-      });
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const reviewsData = await Promise.all(
+        snapshot.docs.map(async (reviewDoc) => {
+          const data = reviewDoc.data();
+          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt?.seconds * 1000 || 0);
+          
+          // Fetch real guest information from users collection
+          let guestInfo = {
+            name: data.guestName || 'Guest',
+            photoURL: null
+          };
+          
+          if (data.guestId) {
+            try {
+              const guestDoc = await getDoc(doc(db, 'users', data.guestId));
+              if (guestDoc.exists()) {
+                const guestData = guestDoc.data();
+                guestInfo = {
+                  name: guestData.displayName || guestData.name || guestData.email?.split('@')[0] || 'Guest',
+                  photoURL: guestData.photoURL || null
+                };
+              }
+            } catch (error) {
+              console.error('Error fetching guest info:', error);
+              // Fallback to review data if user fetch fails
+              guestInfo.name = data.guestName || 'Guest';
+            }
+          }
+          
+          return {
+            id: reviewDoc.id,
+            ...data,
+            createdAt,
+            guestName: guestInfo.name,
+            guestPhotoURL: guestInfo.photoURL
+          };
+        })
+      );
       
       // Sort client-side by createdAt (newest first)
       const sortedReviews = reviewsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
@@ -927,13 +1074,21 @@ const ListingDetail = () => {
                     )}
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900 mb-1">Hosted by {listing.hostName || 'Host'}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-lg text-gray-900">Hosted by {listing.hostName || 'Host'}</h3>
+                      {hostInfo.tier && !hostInfo.loading && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 ${hostInfo.tier.color}`} title={`${hostInfo.tier.name} Rank`}>
+                          <span>{hostInfo.tier.icon}</span>
+                          <span>{hostInfo.tier.name}</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 flex items-center gap-2">
                       <span className="flex items-center gap-1">
                         <svg className="w-4 h-4 text-teal-600" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                         </svg>
-                        2 years hosting
+                        {hostInfo.loading ? 'Loading...' : hostInfo.hostingDuration || 'New host'}
                       </span>
                     </p>
                   </div>
@@ -1038,37 +1193,59 @@ const ListingDetail = () => {
                 )}
 
                 {/* Location Map */}
-                {listing.location && listing.location.latitude && listing.location.longitude && (
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Where you'll be</h2>
-                    <p className="text-gray-700 mb-4 text-lg">
-                      {listing.location.address || `${listing.location.city || ''}, ${listing.location.state || ''} ${listing.location.country || 'Philippines'}`.trim()}
-                    </p>
-                    <div className="h-[450px] rounded-2xl overflow-hidden border-2 border-gray-200 shadow-lg">
-                      <MapContainer
-                        center={[listing.location.latitude, listing.location.longitude]}
-                        zoom={14}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={true}
-                      >
-                        <TileLayer
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        />
-                        <Marker position={[listing.location.latitude, listing.location.longitude]}>
-                          <Popup>
-                            <div className="text-center">
-                              <p className="font-semibold text-gray-900 mb-1">{propertyDetails?.title || 'Listing Location'}</p>
-                              <p className="text-sm text-gray-600">
-                                {listing.location.address || `${listing.location.city || ''}, ${listing.location.country || 'Philippines'}`.trim()}
-                              </p>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      </MapContainer>
-                    </div>
-                  </div>
-                )}
+                {(() => {
+                  if (!listing.location) return null;
+                  
+                  // Check for latitude/longitude in various possible locations
+                  const lat = listing.location.latitude || listing.location.lat || (listing.location.coordinates && listing.location.coordinates[0]);
+                  const lng = listing.location.longitude || listing.location.lng || listing.location.lon || (listing.location.coordinates && listing.location.coordinates[1]);
+                  
+                  // Validate coordinates
+                  const isValidLat = lat != null && !isNaN(parseFloat(lat)) && parseFloat(lat) >= -90 && parseFloat(lat) <= 90;
+                  const isValidLng = lng != null && !isNaN(parseFloat(lng)) && parseFloat(lng) >= -180 && parseFloat(lng) <= 180;
+                  
+                  if (isValidLat && isValidLng) {
+                    const centerLat = parseFloat(lat);
+                    const centerLng = parseFloat(lng);
+                    
+                    return (
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">Where you'll be</h2>
+                        <p className="text-gray-700 mb-4 text-lg">
+                          {listing.location.address || `${listing.location.city || ''}, ${listing.location.state || ''} ${listing.location.country || 'Philippines'}`.trim()}
+                        </p>
+                        <div className="h-[450px] rounded-2xl overflow-hidden border-2 border-gray-300 shadow-lg">
+                          <MapContainer
+                            key={`overview-map-${centerLat}-${centerLng}`}
+                            center={[centerLat, centerLng]}
+                            zoom={15}
+                            style={{ height: '100%', width: '100%', zIndex: 0 }}
+                            scrollWheelZoom={true}
+                          >
+                            <TileLayer
+                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            />
+                            <Marker 
+                              position={[centerLat, centerLng]}
+                              icon={defaultIcon}
+                            >
+                              <Popup>
+                                <div className="p-2 text-center">
+                                  <p className="font-semibold text-gray-900 mb-1">{propertyDetails?.title || 'Listing Location'}</p>
+                                  <p className="text-sm text-gray-600">
+                                    {listing.location.address || `${listing.location.city || ''}, ${listing.location.country || 'Philippines'}`.trim()}
+                                  </p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          </MapContainer>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 {/* House Rules */}
                 <div>
@@ -1169,8 +1346,22 @@ const ListingDetail = () => {
                     reviews.map(review => (
                       <div key={review.id} className="border-2 border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow bg-white">
                         <div className="flex items-start gap-4 mb-4">
-                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg">
-                            <span className="text-white text-xl font-bold">
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center flex-shrink-0 shadow-lg overflow-hidden">
+                            {review.guestPhotoURL ? (
+                              <img 
+                                src={review.guestPhotoURL} 
+                                alt={review.guestName || 'Guest'} 
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback to initial if image fails to load
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <span 
+                              className={`text-white text-xl font-bold ${review.guestPhotoURL ? 'hidden' : 'flex'} items-center justify-center w-full h-full`}
+                            >
                               {review.guestName?.charAt(0)?.toUpperCase() || 'G'}
                             </span>
                           </div>
@@ -1208,29 +1399,63 @@ const ListingDetail = () => {
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Where you'll be</h2>
                 <p className="text-gray-700 mb-4">
-                  {listing.location.address || `${listing.location.city}, ${listing.location.state || ''} ${listing.location.country || 'Philippines'}`.trim()}
+                  {listing.location.address || `${listing.location.city || ''}, ${listing.location.state || ''} ${listing.location.country || 'Philippines'}`.trim()}
                 </p>
-                {listing.location.latitude && listing.location.longitude ? (
-                  <div className="h-[400px] rounded-xl overflow-hidden border border-gray-200">
-                    <MapContainer
-                      center={[listing.location.latitude, listing.location.longitude]}
-                      zoom={13}
-                      style={{ height: '100%', width: '100%' }}
-                    >
-                      <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      />
-                      <Marker position={[listing.location.latitude, listing.location.longitude]}>
-                        <Popup>{propertyDetails?.title}</Popup>
-                      </Marker>
-                    </MapContainer>
-                  </div>
-                ) : (
-                  <div className="h-[400px] bg-gray-100 rounded-xl flex items-center justify-center text-gray-500">
-                    Map location not available
-                  </div>
-                )}
+                {(() => {
+                  // Check for latitude/longitude in various possible locations
+                  const lat = listing.location.latitude || listing.location.lat || (listing.location.coordinates && listing.location.coordinates[0]);
+                  const lng = listing.location.longitude || listing.location.lng || listing.location.lon || (listing.location.coordinates && listing.location.coordinates[1]);
+                  
+                  // Validate coordinates
+                  const isValidLat = lat != null && !isNaN(parseFloat(lat)) && parseFloat(lat) >= -90 && parseFloat(lat) <= 90;
+                  const isValidLng = lng != null && !isNaN(parseFloat(lng)) && parseFloat(lng) >= -180 && parseFloat(lng) <= 180;
+                  
+                  if (isValidLat && isValidLng) {
+                    const centerLat = parseFloat(lat);
+                    const centerLng = parseFloat(lng);
+                    
+                    return (
+                      <div className="h-[500px] rounded-xl overflow-hidden border-2 border-gray-300 shadow-lg">
+                        <MapContainer
+                          key={`${centerLat}-${centerLng}`}
+                          center={[centerLat, centerLng]}
+                          zoom={15}
+                          style={{ height: '100%', width: '100%', zIndex: 0 }}
+                          scrollWheelZoom={true}
+                        >
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          />
+                          <Marker 
+                            position={[centerLat, centerLng]}
+                            icon={defaultIcon}
+                          >
+                            <Popup>
+                              <div className="p-2">
+                                <p className="font-semibold text-gray-900 mb-1">{propertyDetails?.title || 'Listing Location'}</p>
+                                <p className="text-sm text-gray-600">
+                                  {listing.location.address || `${listing.location.city || ''}, ${listing.location.country || 'Philippines'}`.trim()}
+                                </p>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        </MapContainer>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="h-[500px] bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex flex-col items-center justify-center text-gray-600 border-2 border-dashed border-gray-300">
+                        <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <p className="text-lg font-medium mb-2">Map location not available</p>
+                        <p className="text-sm text-gray-500">Location coordinates are missing for this listing.</p>
+                      </div>
+                    );
+                  }
+                })()}
               </div>
             )}
 
@@ -1247,8 +1472,16 @@ const ListingDetail = () => {
                   )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Meet your host, {listing.hostName || 'Host'}</h3>
-                  <p className="text-gray-600 mb-4">2 years hosting · {reviews.length} reviews</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900">Meet your host, {listing.hostName || 'Host'}</h3>
+                    {hostInfo.tier && !hostInfo.loading && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 ${hostInfo.tier.color}`} title={`${hostInfo.tier.name} Rank`}>
+                        <span>{hostInfo.tier.icon}</span>
+                        <span>{hostInfo.tier.name}</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-600 mb-4">{hostInfo.loading ? 'Loading...' : hostInfo.hostingDuration || 'New host'} · {reviews.length} reviews</p>
                   <div className="flex items-center gap-2 text-sm">
                     <div className="flex items-center">
                       <svg className="w-4 h-4 text-yellow-500 mr-1" fill="currentColor" viewBox="0 0 20 20">

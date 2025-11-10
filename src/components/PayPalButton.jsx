@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { paypalPaymentConfig } from '../config/paypal';
+import { paypalPaymentConfig, adminPayPalEmail } from '../config/paypal';
 
 export default function PayPalButton({ amount, description, onSuccess, onError, onCancel, disabled = false }) {
   const paypal = useRef();
@@ -40,7 +40,7 @@ export default function PayPalButton({ amount, description, onSuccess, onError, 
                       value: roundedAmount,
                     },
                     payee: {
-                      email_address: 'sb-xivle46740431@business.admin.com' // Route to admin PayPal account
+                      email_address: adminPayPalEmail // Route to admin PayPal account
                     }
                   },
                 ],

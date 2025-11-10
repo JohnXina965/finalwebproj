@@ -40,12 +40,42 @@ function GuestWishlist() {
       setFavorites(favoriteIds);
 
       // Fetch listing details from Firestore
-      const allIds = [...favoriteIds.homes, ...favoriteIds.experiences, ...favoriteIds.services];
+      // Filter out any invalid IDs and ensure they're all valid strings/numbers
+      const allIds = [
+        ...(Array.isArray(favoriteIds.homes) ? favoriteIds.homes : []),
+        ...(Array.isArray(favoriteIds.experiences) ? favoriteIds.experiences : []),
+        ...(Array.isArray(favoriteIds.services) ? favoriteIds.services : [])
+      ].filter(id => id != null && id !== '' && id !== 'null' && id !== 'undefined');
+      
       const listingsData = {};
 
       for (const listingId of allIds) {
         try {
-          const listingDoc = await getDoc(doc(db, 'listings', listingId));
+          // Ensure listingId is a valid string
+          if (!listingId) {
+            console.warn('Empty listing ID found, skipping');
+            continue;
+          }
+          
+          // Convert to string and validate
+          const listingIdStr = typeof listingId === 'string' 
+            ? listingId.trim() 
+            : (typeof listingId === 'number' 
+              ? String(listingId) 
+              : (listingId?.toString ? listingId.toString().trim() : null));
+          
+          if (!listingIdStr || listingIdStr === 'null' || listingIdStr === 'undefined') {
+            console.warn('Invalid listing ID:', listingId, 'type:', typeof listingId);
+            continue;
+          }
+          
+          // Validate it looks like a Firestore document ID (no special characters that would break)
+          if (listingIdStr.includes('/') || listingIdStr.length === 0) {
+            console.warn('Invalid listing ID format:', listingIdStr);
+            continue;
+          }
+          
+          const listingDoc = await getDoc(doc(db, 'listings', listingIdStr));
           if (listingDoc.exists()) {
             const listingData = listingDoc.data();
             const getPhotoUrl = (photos) => {
@@ -54,7 +84,7 @@ function GuestWishlist() {
               return typeof firstPhoto === 'string' ? firstPhoto : (firstPhoto.url || firstPhoto);
             };
 
-            listingsData[listingId] = {
+            listingsData[listingIdStr] = {
               id: listingDoc.id,
               ...listingData,
               image: getPhotoUrl(listingData.photos) ||
@@ -75,6 +105,7 @@ function GuestWishlist() {
           }
         } catch (err) {
           console.error(`Error fetching listing ${listingId}:`, err);
+          // Continue with other listings even if one fails
         }
       }
 

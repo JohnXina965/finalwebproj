@@ -73,8 +73,20 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Don't close if confirmation modal is open
+      if (showWithdrawalConfirm || showCashInSuccess) {
+        return;
+      }
+      
+      // Check if click is outside the main modal
       if (modalRef.current && !modalRef.current.contains(event.target)) {
-        onClose();
+        // Also check if click is outside confirmation modals
+        const confirmationModal = document.querySelector('[data-confirmation-modal]');
+        const successModal = document.querySelector('[data-success-modal]');
+        
+        if (!confirmationModal && !successModal) {
+          onClose();
+        }
       }
     };
 
@@ -97,7 +109,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, showWithdrawalConfirm, showCashInSuccess]);
 
   const handleAmountChange = (e) => {
     const value = e.target.value;
@@ -120,6 +132,26 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
     await refreshTransactions();
     if (loadWalletData) {
       await loadWalletData();
+    }
+
+    // Send cash-in confirmation email
+    try {
+      const { sendCashInConfirmationEmail } = await import('../services/EmailService');
+      if (currentUser?.email) {
+        await sendCashInConfirmationEmail(
+          currentUser.email,
+          currentUser.displayName || currentUser.email,
+          {
+            amount: amount,
+            newBalance: newBalance,
+            transactionId: `cashin_${Date.now()}`,
+            dateTime: new Date()
+          }
+        );
+      }
+    } catch (emailError) {
+      console.error('Error sending cash-in confirmation email:', emailError);
+      // Don't block cash-in success if email fails
     }
   };
 
@@ -154,16 +186,41 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
   };
 
   const handleWithdrawalProceed = async () => {
-    if (!withdrawalConfirmData) return;
+    if (!withdrawalConfirmData) {
+      console.error('❌ No withdrawal confirmation data');
+      return;
+    }
 
     try {
       setCashOutProcessing(true);
+      console.log('🔄 Starting withdrawal process...', withdrawalConfirmData);
+      
       const { amount, paypalEmail } = withdrawalConfirmData;
       
-      await cashOut(amount, paypalEmail, `Withdrawal to ${paypalEmail}`);
+      if (!amount || amount <= 0) {
+        throw new Error('Invalid withdrawal amount');
+      }
+      
+      if (!paypalEmail || !paypalEmail.includes('@')) {
+        throw new Error('Invalid PayPal email address');
+      }
+      
+      console.log('📤 Calling cashOut function...', { amount, paypalEmail });
+      
+      const result = await cashOut(amount, paypalEmail, `Withdrawal to ${paypalEmail}`);
+      
+      console.log('✅ CashOut result:', result);
+      
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Withdrawal failed');
+      }
+      
+      const payoutId = result?.payoutId || 'N/A';
+      const newBalance = result?.newBalance || balance - amount;
+      console.log('✅ Withdrawal successful! Payout ID:', payoutId);
       
       toast.success(
-        `Withdrawal request submitted! ₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} has been deducted from your wallet. The admin will process this manually and send it to ${paypalEmail} within 1-3 business days.`,
+        `✅ Withdrawal successful! ₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} has been sent to ${paypalEmail}. Payout ID: ${payoutId}`,
         { duration: 6000 }
       );
       
@@ -171,13 +228,53 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
       setShowWithdrawalConfirm(false);
       setWithdrawalConfirmData(null);
       
-      await refreshTransactions();
-      if (loadWalletData) {
-        await loadWalletData();
+      // Refresh transactions to show the new withdrawal transaction
+      // Note: Balance should already be updated by cashOut function via context
+      try {
+        await refreshTransactions();
+        // Reload wallet data to ensure balance is synced from Firestore
+        if (loadWalletData) {
+          await loadWalletData();
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing wallet data:', refreshError);
+        // Balance is already updated in context, so this is just for transactions
+      }
+
+      // Send withdrawal confirmation email
+      try {
+        const { sendWithdrawalConfirmationEmail } = await import('../services/EmailService');
+        if (currentUser?.email) {
+          await sendWithdrawalConfirmationEmail(
+            currentUser.email,
+            currentUser.displayName || currentUser.email,
+            {
+              amount: amount,
+              newBalance: newBalance,
+              paypalEmail: paypalEmail,
+              payoutId: payoutId,
+              dateTime: new Date()
+            }
+          );
+        }
+      } catch (emailError) {
+        console.error('Error sending withdrawal confirmation email:', emailError);
+        // Don't block withdrawal success if email fails
       }
     } catch (error) {
-      console.error('Withdrawal error:', error);
-      toast.error(error.message || 'Failed to process withdrawal. Please try again.');
+      console.error('❌ Withdrawal error:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', {
+        message: error.message,
+        name: error.name,
+        withdrawalData: withdrawalConfirmData
+      });
+      
+      const errorMessage = error.message || 'Failed to process withdrawal. Please try again.';
+      toast.error(errorMessage, { duration: 8000 });
+      
+      // Don't close the modal on error so user can try again
+      // setShowWithdrawalConfirm(false);
     } finally {
       setCashOutProcessing(false);
     }
@@ -238,7 +335,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
         <div 
           ref={modalRef}
           className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
@@ -396,6 +493,11 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                       </p>
                     </div>
                   )}
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-800">
+                      💡 <strong>For testing:</strong> Use a PayPal sandbox email (e.g., <code className="bg-blue-100 px-1 rounded">sb-bbsz447207047@business.example.com</code>)
+                    </p>
+                  </div>
                 </div>
 
                 {/* Amount Input */}
@@ -488,12 +590,12 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                 </button>
 
                 {/* Help Text */}
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800 mb-2">
-                    <strong>⚠️ Important:</strong> Withdrawals are processed manually by admin. The amount will be deducted from your wallet immediately, but it may take 1-3 business days to appear in your PayPal account.
+                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-xs text-green-800 mb-2">
+                    <strong>✅ Instant Withdrawal:</strong> Your withdrawal will be processed immediately via PayPal Payouts API. The amount will be deducted from your wallet and sent directly to your PayPal account.
                   </p>
-                  <p className="text-xs text-blue-700">
-                    <strong>Note:</strong> For automatic PayPal transfers, PayPal Payouts API integration is required (backend server needed). Currently, withdrawals are processed manually by the admin team.
+                  <p className="text-xs text-green-700">
+                    <strong>Note:</strong> Make sure your PayPal email is correct. The money will be sent instantly to your PayPal account (sandbox mode for testing).
                   </p>
                 </div>
               </div>
@@ -569,8 +671,20 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
 
       {/* Cash-In Success Modal - Only show if wallet modal is open */}
       {isOpen && showCashInSuccess && cashInSuccessData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div 
+          className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[110] flex items-center justify-center p-4"
+          data-success-modal
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCashInSuccess(false);
+              setCashInSuccessData(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-orange-500 flex items-center justify-center">
                 <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -606,30 +720,48 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
 
       {/* Withdrawal Confirmation Modal - Only show if wallet modal is open */}
       {isOpen && showWithdrawalConfirm && withdrawalConfirmData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+        <div 
+          className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[110] flex items-center justify-center p-4"
+          data-confirmation-modal
+          onClick={(e) => {
+            // Only close if clicking the backdrop, not the modal content
+            if (e.target === e.currentTarget && !cashOutProcessing) {
+              setShowWithdrawalConfirm(false);
+              setWithdrawalConfirmData(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Withdrawal</h3>
             <p className="text-gray-700 mb-4">
               Are you sure you want to withdraw <span className="text-orange-500 font-bold">₱{withdrawalConfirmData.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>?
             </p>
-            <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <strong>⚠️ Note:</strong> The amount will be deducted from your wallet immediately. This withdrawal will be processed manually by admin and may take 1-3 business days to appear in your PayPal account ({withdrawalConfirmData.paypalEmail}).
+            <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">
+                <strong>✅ Instant Transfer:</strong> The amount will be deducted from your wallet and sent immediately to your PayPal account ({withdrawalConfirmData.paypalEmail}) via PayPal Payouts API.
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  setShowWithdrawalConfirm(false);
-                  setWithdrawalConfirmData(null);
+                  if (!cashOutProcessing) {
+                    setShowWithdrawalConfirm(false);
+                    setWithdrawalConfirmData(null);
+                  }
                 }}
                 disabled={cashOutProcessing}
-                className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
-                onClick={handleWithdrawalProceed}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleWithdrawalProceed();
+                }}
                 disabled={cashOutProcessing}
                 className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -643,6 +775,13 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                 )}
               </button>
             </div>
+            {cashOutProcessing && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  ⏳ Processing withdrawal... Please wait. This may take a few seconds.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

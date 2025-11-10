@@ -91,8 +91,8 @@ function Navigation() {
     return null;
   }
   
-  // Use simplified nav for login/signup pages
-  if (location.pathname === '/login' || location.pathname === '/signup') {
+  // Use simplified nav for login/signup/verify-otp pages
+  if (location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/verify-otp') {
     return <LoginSignupNav />;
   }
 
@@ -118,6 +118,17 @@ function AppFooter() {
     return null;
   }
   return <Footer />;
+}
+
+// Scroll to top on route change
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
 }
 
 function App() {
@@ -179,6 +190,7 @@ function App() {
         <WalletProvider>
           <HostProvider>
             <Router>
+              <ScrollToTop />
               <Toaster 
                 position="top-right"
                 toastOptions={{

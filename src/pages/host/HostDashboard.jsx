@@ -20,6 +20,16 @@ import { getHostListingPerformance, getPerformanceSummary } from '../../services
 import { exportBookingsToCSV } from '../../services/BookingExportService';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import BookingsPDFDocument from '../../components/BookingsPDFDocument';
+import { 
+  getSubscriptionPlan, 
+  canCreateListing, 
+  getLimitReachedActions,
+  getUpgradeOptions,
+  getBulkSlotPricing,
+  SUBSCRIPTION_PLANS,
+  ADDITIONAL_LISTING_PRICES,
+  BULK_SLOT_PRICING
+} from '../../services/SubscriptionService';
 
 const HostDashboard = () => {
   const { currentUser } = useAuth();
@@ -47,6 +57,11 @@ const HostDashboard = () => {
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [hostSubscription, setHostSubscription] = useState({
+    planId: 'starter',
+    status: 'active',
+    additionalSlots: 0
+  });
 
   // Dashboard sections
   const sections = [
@@ -58,9 +73,10 @@ const HostDashboard = () => {
     { id: 'reviews', label: 'Reviews', icon: '⭐' },
     { id: 'wishes', label: 'Wishes', icon: '💭' },
     { id: 'calendar', label: 'Calendar', icon: '📅' },
+    { id: 'subscription', label: 'Subscription', icon: '💳' },
     { id: 'payments', label: 'Payments', icon: '💰' },
     { id: 'coupons', label: 'Coupons', icon: '🎫' },
-    { id: 'points', label: 'Points', icon: '🎁' }
+    { id: 'points', label: 'Points & Rewards', icon: '🎁' }
   ];
 
   // Fetch real data from Firebase
@@ -76,7 +92,8 @@ const HostDashboard = () => {
           fetchDrafts(),
           fetchBookings(),
           fetchMessages(),
-          fetchWishes()
+          fetchWishes(),
+          fetchHostSubscription()
         ]);
       } catch (error) {
         console.error('Error fetching host data:', error);
@@ -298,6 +315,40 @@ const HostDashboard = () => {
     }
   };
 
+  // Fetch host subscription data
+  const fetchHostSubscription = async () => {
+    if (!currentUser) return;
+
+    try {
+      const hostDocRef = doc(db, 'hosts', currentUser.uid);
+      const hostDoc = await getDoc(hostDocRef);
+      
+      if (hostDoc.exists()) {
+        const hostData = hostDoc.data();
+        setHostSubscription({
+          planId: hostData.subscriptionPlan?.id || hostData.subscriptionPlan || 'starter',
+          status: hostData.subscriptionStatus || 'active',
+          additionalSlots: hostData.additionalListingSlots || 0
+        });
+      } else {
+        // Default to starter plan if no subscription found
+        setHostSubscription({
+          planId: 'starter',
+          status: 'active',
+          additionalSlots: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching host subscription:', error);
+      // Default to starter plan on error
+      setHostSubscription({
+        planId: 'starter',
+        status: 'active',
+        additionalSlots: 0
+      });
+    }
+  };
+
   // Real-time listeners
   const setupListingsListener = () => {
     if (!currentUser) return;
@@ -484,7 +535,16 @@ const HostDashboard = () => {
             case 'dashboard':
               return <DashboardOverview stats={stats} listings={listings} bookings={bookings} />;
             case 'listings':
-              return <ListingsSection listings={listings} drafts={drafts} setListings={setListings} setDrafts={setDrafts} bookings={bookings} />;
+              return <ListingsSection 
+                listings={listings} 
+                drafts={drafts} 
+                setListings={setListings} 
+                setDrafts={setDrafts} 
+                bookings={bookings}
+                hostSubscription={hostSubscription}
+                balance={balance}
+                onSubscriptionUpdate={fetchHostSubscription}
+              />;
             case 'performance':
               return <PerformanceSection listings={listings} bookings={bookings} />;
             case 'bookings':
@@ -497,6 +557,13 @@ const HostDashboard = () => {
               return <WishesSection wishes={wishes} listings={listings} onUpdateWish={fetchWishes} />;
             case 'calendar':
               return <CalendarSection bookings={bookings} listings={listings} />;
+            case 'subscription':
+              return <SubscriptionSection 
+                hostSubscription={hostSubscription}
+                balance={balance}
+                listings={listings}
+                onSubscriptionUpdate={fetchHostSubscription}
+              />;
             case 'payments':
               return <PaymentsSection bookings={bookings} listings={listings} />;
             case 'coupons':
@@ -549,7 +616,7 @@ const HostDashboard = () => {
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r-2 border-gray-200 shadow-xl lg:shadow-none transition-all duration-300 ease-in-out transform ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       }`}>
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full pt-16 lg:pt-0">
           {/* Sidebar Header */}
           <div className="p-6 border-b-2 border-gray-100">
             <div className="flex items-center justify-between mb-4">
@@ -613,9 +680,7 @@ const HostDashboard = () => {
                 )}
                 {section.id === 'messages' && stats.unreadMessages > 0 && (
                   <div className="relative z-10">
-                    {/* Red dot indicator */}
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-lg animate-pulse"></div>
-                    {/* Count badge */}
+                    {/* Count badge only - no green dot */}
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full relative transition-all duration-300 ${
                       activeSection === section.id 
                         ? 'bg-white/20 text-white backdrop-blur-sm' 
@@ -626,10 +691,8 @@ const HostDashboard = () => {
                   </div>
                 )}
                 {section.id === 'bookings' && bookings.length > 0 && (
-                  <div className="relative z-10 flex items-center gap-2">
-                    {/* Green dot indicator */}
-                    <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-white shadow-lg"></div>
-                    {/* Show count of active bookings */}
+                  <div className="relative z-10">
+                    {/* Show count of active bookings - no green dot */}
                     {stats.activeBookings > 0 && (
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all duration-300 ${
                         activeSection === section.id 
@@ -664,7 +727,7 @@ const HostDashboard = () => {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
+      <div className="flex-1 lg:ml-0 pt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Mobile Menu Button */}
           <button
@@ -1006,82 +1069,525 @@ const PerformanceSection = ({ listings, bookings }) => {
 };
 
 // Enhanced Listings Section with Real Data
-const ListingsSection = ({ listings, drafts, setListings, setDrafts, bookings }) => (
-  <div className="p-8">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Your Listings</h2>
-        <p className="text-gray-600 mt-2">
-          {listings.length} published listings • {drafts.length} drafts
-        </p>
-      </div>
-      <Link
-        to="/host/create-listing"
-        className="px-8 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl hover:shadow-lg hover:shadow-teal-500/25 transition-all duration-500 font-semibold flex items-center space-x-2 transform hover:scale-105"
-      >
-        <span>+</span>
-        <span>Create New Listing</span>
-      </Link>
-    </div>
+const ListingsSection = ({ listings, drafts, setListings, setDrafts, bookings, hostSubscription, balance, onSubscriptionUpdate }) => {
+  const { currentUser } = useAuth();
+  const { deduct } = useWallet();
+  const navigate = useNavigate();
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showAddSlotsModal, setShowAddSlotsModal] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [localSubscription, setLocalSubscription] = useState(hostSubscription);
+  const [showDrafts, setShowDrafts] = useState(false); // Toggle between drafts and published
 
-    {/* Drafts Section */}
-    {drafts.length > 0 && (
-      <div className="mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <span className="w-2 h-2 bg-yellow-500 rounded-full mr-3 animate-pulse"></span>
-          Drafts ({drafts.length})
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {drafts.map((draft) => (
-            <ListingCard 
-              key={draft.id} 
-              listing={draft} 
-              isDraft={true}
-              onDelete={() => {
-                setDrafts(prev => prev.filter(d => d.id !== draft.id));
-              }}
-            />
-          ))}
+  // Update local subscription when prop changes
+  useEffect(() => {
+    setLocalSubscription(hostSubscription);
+  }, [hostSubscription]);
+
+  // Calculate listing availability
+  const listingAvailability = canCreateListing(
+    localSubscription.planId,
+    listings.length,
+    localSubscription.additionalSlots
+  );
+
+  const subscriptionPlan = getSubscriptionPlan(localSubscription.planId);
+  const limitReachedActions = getLimitReachedActions(localSubscription.planId, listings.length);
+
+  // Handle create listing click
+  const handleCreateListing = () => {
+    if (listingAvailability.allowed) {
+      navigate('/host/create-listing');
+    } else {
+      setShowUpgradeModal(true);
+    }
+  };
+
+  // Handle upgrade subscription
+  const handleUpgrade = async (planId) => {
+    setProcessing(true);
+    try {
+      const upgradePlan = getSubscriptionPlan(planId);
+      const priceInPHP = convertToPHP(upgradePlan.price);
+      
+      if (balance < priceInPHP) {
+        toast.error(`Insufficient balance. You need ₱${priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+        setShowUpgradeModal(false);
+        return;
+      }
+
+      // Deduct from wallet
+      await deduct(priceInPHP, `Subscription Upgrade: ${upgradePlan.name} Plan`);
+
+      // Update host subscription in Firestore
+      const hostDocRef = doc(db, 'hosts', currentUser.uid);
+      await updateDoc(hostDocRef, {
+        subscriptionPlan: planId,
+        subscriptionStatus: 'active',
+        updatedAt: serverTimestamp()
+      });
+
+      // Update local state
+      setLocalSubscription(prev => ({
+        ...prev,
+        planId: planId
+      }));
+
+      // Refresh subscription data from parent
+      if (onSubscriptionUpdate) {
+        await onSubscriptionUpdate();
+      }
+
+      toast.success(`Successfully upgraded to ${upgradePlan.name} plan!`);
+      setShowUpgradeModal(false);
+    } catch (error) {
+      console.error('Error upgrading subscription:', error);
+      toast.error('Failed to upgrade subscription. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Handle purchase additional slots
+  const handlePurchaseSlots = async (slotType, quantity = 1) => {
+    setProcessing(true);
+    try {
+      // Use bulk pricing for existing hosts
+      const bulkPricing = getBulkSlotPricing(quantity, 'oneTime', true);
+      const priceInPHP = convertToPHP(bulkPricing.price);
+      
+      if (balance < priceInPHP) {
+        toast.error(`Insufficient balance. You need ₱${priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+        setShowAddSlotsModal(false);
+        return;
+      }
+
+      // Deduct from wallet
+      await deduct(priceInPHP, `Additional Listing Slots: ${quantity} slot(s) - One-Time`);
+
+      // Update host subscription in Firestore
+      const hostDocRef = doc(db, 'hosts', currentUser.uid);
+      const currentSlots = localSubscription.additionalSlots || 0;
+      await updateDoc(hostDocRef, {
+        additionalListingSlots: currentSlots + quantity,
+        slotType: 'oneTime',
+        updatedAt: serverTimestamp()
+      });
+
+      // Update local state
+      setLocalSubscription(prev => ({
+        ...prev,
+        additionalSlots: currentSlots + quantity
+      }));
+
+      // Refresh subscription data from parent
+      if (onSubscriptionUpdate) {
+        await onSubscriptionUpdate();
+      }
+
+      toast.success(`Successfully purchased ${quantity} additional listing slot(s)! ${bulkPricing.savings > 0 ? `You saved ₱${convertToPHP(bulkPricing.savings).toLocaleString('en-PH', { minimumFractionDigits: 2 })}!` : ''}`);
+      setShowAddSlotsModal(false);
+    } catch (error) {
+      console.error('Error purchasing slots:', error);
+      toast.error('Failed to purchase slots. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <div className="p-8">
+      {/* Subscription & Listing Limit Info */}
+      <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border-2 border-teal-200 rounded-xl p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              {subscriptionPlan.name} Plan
+            </h3>
+            <div className="flex items-center gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Listings Used: </span>
+                <span className="font-bold text-gray-900">{listings.length}</span>
+                <span className="text-gray-600"> / </span>
+                <span className={`font-bold ${listingAvailability.remaining === 0 ? 'text-red-600' : 'text-teal-600'}`}>
+                  {subscriptionPlan.listingLimit === -1 ? '∞' : (subscriptionPlan.listingLimit + localSubscription.additionalSlots)}
+                </span>
+              </div>
+              {localSubscription.additionalSlots > 0 && (
+                <div className="text-xs text-gray-500">
+                  (+{localSubscription.additionalSlots} additional slot{localSubscription.additionalSlots !== 1 ? 's' : ''})
+                </div>
+              )}
+              {listingAvailability.remaining > 0 && (
+                <div className="text-teal-700 font-semibold">
+                  {listingAvailability.remaining} slot{listingAvailability.remaining !== 1 ? 's' : ''} available
+                </div>
+              )}
+              {listingAvailability.remaining === 0 && subscriptionPlan.listingLimit !== -1 && (
+                <div className="text-red-700 font-semibold flex items-center gap-2">
+                  <span>⚠️ Limit Reached</span>
+                </div>
+              )}
+            </div>
+          </div>
+          {listingAvailability.remaining === 0 && subscriptionPlan.listingLimit !== -1 && (
+            <button
+              onClick={() => setShowUpgradeModal(true)}
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors"
+            >
+              Upgrade or Add Slots
+            </button>
+          )}
         </div>
       </div>
-    )}
 
-    {/* Published Listings */}
-    <div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-        <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
-        Published Listings ({listings.length})
-      </h3>
-      {listings.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {listings.map((listing) => (
-            <ListingCard 
-              key={listing.id} 
-              listing={listing} 
-              isDraft={false}
-              onDelete={() => {
-                setListings(prev => prev.filter(l => l.id !== listing.id));
-              }}
-              onToggleStatus={(id, status) => {
-                setListings(prev => prev.map(l => 
-                  l.id === id ? { ...l, isActive: status, status: status ? 'published' : 'inactive' } : l
-                ));
-              }}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Your Listings</h2>
+          <p className="text-gray-600 mt-2">
+            {showDrafts 
+              ? `${drafts.length} draft${drafts.length !== 1 ? 's' : ''}`
+              : `${listings.length} published listing${listings.length !== 1 ? 's' : ''}`
+            }
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {(drafts.length > 0 || listings.length > 0) && (
+            <button
+              onClick={() => setShowDrafts(!showDrafts)}
+              className="px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 font-semibold flex items-center space-x-2"
+            >
+              {showDrafts ? (
+                <>
+                  <span>📋</span>
+                  <span>View Listings ({listings.length})</span>
+                </>
+              ) : (
+                <>
+                  <span>📝</span>
+                  <span>View Drafts ({drafts.length})</span>
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={handleCreateListing}
+            disabled={!listingAvailability.allowed && subscriptionPlan.listingLimit !== -1}
+            className={`px-8 py-3 rounded-xl hover:shadow-lg transition-all duration-500 font-semibold flex items-center space-x-2 transform hover:scale-105 ${
+              listingAvailability.allowed || subscriptionPlan.listingLimit === -1
+                ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white hover:shadow-teal-500/25'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            <span>+</span>
+            <span>Create New Listing</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Conditional Rendering: Drafts or Published Listings */}
+      {showDrafts ? (
+        /* Drafts Section */
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <span className="w-2 h-2 bg-yellow-500 rounded-full mr-3 animate-pulse"></span>
+            Drafts ({drafts.length})
+          </h3>
+          {drafts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {drafts.map((draft) => (
+                <ListingCard 
+                  key={draft.id} 
+                  listing={draft} 
+                  isDraft={true}
+                  onDelete={() => {
+                    setDrafts(prev => prev.filter(d => d.id !== draft.id));
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState 
+              icon="📝"
+              title="No drafts yet"
+              description="Create a new listing to get started"
+              actionText="Create Listing"
+              actionLink="/host/create-listing"
             />
-          ))}
+          )}
         </div>
       ) : (
-        <EmptyState 
-          icon="🏠"
-          title="No listings yet"
-          description="Create your first listing to start hosting guests and earning money"
-          actionText="Create Listing"
-          actionLink="/host/create-listing"
+        /* Published Listings */
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
+            Published Listings ({listings.length})
+          </h3>
+          {listings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {listings.map((listing) => (
+                <ListingCard 
+                  key={listing.id} 
+                  listing={listing} 
+                  isDraft={false}
+                  onDelete={() => {
+                    setListings(prev => prev.filter(l => l.id !== listing.id));
+                  }}
+                  onToggleStatus={(id, status) => {
+                    setListings(prev => prev.map(l => 
+                      l.id === id ? { ...l, isActive: status, status: status ? 'published' : 'inactive' } : l
+                    ));
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState 
+              icon="🏠"
+              title="No listings yet"
+              description={listingAvailability.allowed || subscriptionPlan.listingLimit === -1 
+                ? "Create your first listing to start hosting guests and earning money"
+                : "You've reached your listing limit. Upgrade your subscription or purchase additional slots to create more listings."
+              }
+              actionText={listingAvailability.allowed || subscriptionPlan.listingLimit === -1 ? "Create Listing" : null}
+              actionLink={listingAvailability.allowed || subscriptionPlan.listingLimit === -1 ? "/host/create-listing" : null}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Upgrade/Add Slots Modal */}
+      {showUpgradeModal && (
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          currentPlanId={localSubscription.planId}
+          currentListingCount={listings.length}
+          balance={balance}
+          onUpgrade={handleUpgrade}
+          onPurchaseSlots={() => {
+            setShowUpgradeModal(false);
+            setShowAddSlotsModal(true);
+          }}
+          processing={processing}
+        />
+      )}
+
+      {/* Add Slots Modal */}
+      {showAddSlotsModal && (
+        <AddSlotsModal
+          isOpen={showAddSlotsModal}
+          onClose={() => setShowAddSlotsModal(false)}
+          balance={balance}
+          onPurchase={handlePurchaseSlots}
+          processing={processing}
         />
       )}
     </div>
-  </div>
-);
+  );
+};
+
+// Upgrade Modal Component
+const UpgradeModal = ({ isOpen, onClose, currentPlanId, currentListingCount, balance, onUpgrade, onPurchaseSlots, processing }) => {
+  if (!isOpen) return null;
+
+  const upgradeOptions = getUpgradeOptions(currentPlanId);
+  const currentPlan = getSubscriptionPlan(currentPlanId);
+
+  return (
+    <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-bold text-gray-900">Upgrade Subscription or Add Listing Slots</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-gray-600 mt-2">
+            You've reached your listing limit ({currentListingCount} / {currentPlan.listingLimit === -1 ? 'Unlimited' : currentPlan.listingLimit} listings). Choose an option below to add more listings.
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Upgrade Options */}
+          {upgradeOptions.length > 0 && (
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Upgrade Subscription Plan</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {upgradeOptions.map(plan => {
+                  const priceInPHP = convertToPHP(plan.price);
+                  return (
+                    <div
+                      key={plan.id}
+                      className="border-2 border-teal-200 rounded-lg p-4 hover:border-teal-500 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h5 className="font-bold text-gray-900 text-lg">{plan.name}</h5>
+                          <p className="text-sm text-gray-600">
+                            {plan.listingLimit === -1 ? 'Unlimited' : plan.listingLimit} listings
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-teal-600">₱{priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                      <ul className="text-xs text-gray-600 space-y-1 mb-3">
+                        {plan.features.slice(0, 3).map((feature, idx) => (
+                          <li key={idx}>• {feature}</li>
+                        ))}
+                      </ul>
+                      <button
+                        onClick={() => onUpgrade(plan.id)}
+                        disabled={processing || balance < priceInPHP}
+                        className={`w-full py-2 px-4 rounded-lg font-semibold transition-colors ${
+                          balance < priceInPHP
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white'
+                        }`}
+                      >
+                        {processing ? 'Processing...' : balance < priceInPHP ? 'Insufficient Balance' : 'Upgrade Now'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Purchase Additional Slots */}
+          <div>
+            <h4 className="text-lg font-semibold text-gray-900 mb-4">Purchase Additional Listing Slots</h4>
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Add more listings without upgrading your plan. Perfect if you only need a few extra slots.
+              </p>
+              <button
+                onClick={onPurchaseSlots}
+                className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                View Slot Options
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Add Slots Modal Component
+const AddSlotsModal = ({ isOpen, onClose, balance, onPurchase, processing }) => {
+  const [quantity, setQuantity] = useState(1);
+
+  if (!isOpen) return null;
+
+  // Use bulk pricing for existing hosts (only oneTime now)
+  const bulkPricing = getBulkSlotPricing(quantity, 'oneTime', true); // true = existing host
+  const priceInPHP = convertToPHP(bulkPricing.price);
+  const slotInfo = ADDITIONAL_LISTING_PRICES.oneTime;
+
+  return (
+    <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-gray-900">Purchase Additional Listing Slots</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+            <div className="p-6 space-y-4">
+              {/* Payment Type Info */}
+              <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
+                <p className="font-semibold text-gray-900 mb-1">{ADDITIONAL_LISTING_PRICES.oneTime.name}</p>
+                <p className="text-xs text-gray-600">{ADDITIONAL_LISTING_PRICES.oneTime.description}</p>
+              </div>
+
+              {/* Quantity Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-10 h-10 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-center"
+              />
+              <button
+                onClick={() => setQuantity(quantity + 1)}
+                className="w-10 h-10 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Price Summary with Bulk Discount */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            {bulkPricing.isBulk && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Regular Price:</span>
+                <span className="text-sm text-gray-500 line-through">₱{convertToPHP(bulkPricing.regularPrice).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Price per slot:</span>
+              <span className="font-semibold text-gray-900">₱{convertToPHP(bulkPricing.perSlot).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-600">Quantity:</span>
+              <span className="font-semibold text-gray-900">{quantity}</span>
+            </div>
+            {bulkPricing.savings > 0 && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-green-600 font-semibold">You Save:</span>
+                <span className="text-green-600 font-bold">₱{convertToPHP(bulkPricing.savings).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center pt-2 border-t border-gray-300">
+              <span className="text-lg font-bold text-gray-900">Total:</span>
+              <span className="text-lg font-bold text-teal-600">₱{priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+
+              {/* Purchase Button */}
+              <button
+                onClick={() => onPurchase('oneTime', quantity)}
+                disabled={processing || balance < priceInPHP}
+            className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors ${
+              balance < priceInPHP
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-teal-600 hover:bg-teal-700 text-white'
+            }`}
+          >
+            {processing ? 'Processing...' : balance < priceInPHP ? 'Insufficient Balance' : `Purchase ${quantity} Slot${quantity !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Listing Card Component with Real Data
 const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => {
@@ -1180,25 +1686,28 @@ const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => 
       
       // Get subscription plans
       const subscriptionPlans = {
-        basic: {
-          id: 'basic',
-          name: 'Basic',
-          price: 9.99,
-          postingDuration: 3,
-          postingDurationUnit: 'months'
+        starter: {
+          id: 'starter',
+          name: 'Starter',
+          price: 399,
+          listingLimit: 3,
+          postingDuration: 1,
+          postingDurationUnit: 'years'
         },
-        professional: {
-          id: 'professional',
-          name: 'Professional',
-          price: 19.99,
-          postingDuration: 12,
-          postingDurationUnit: 'months'
+        pro: {
+          id: 'pro',
+          name: 'Pro',
+          price: 799,
+          listingLimit: 10,
+          postingDuration: 1,
+          postingDurationUnit: 'years'
         },
-        enterprise: {
-          id: 'enterprise',
-          name: 'Enterprise',
-          price: 49.99,
-          postingDuration: 3,
+        elite: {
+          id: 'elite',
+          name: 'Elite',
+          price: 1299,
+          listingLimit: 15,
+          postingDuration: 1,
           postingDurationUnit: 'years'
         }
       };
@@ -1208,8 +1717,8 @@ const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => 
         throw new Error('Invalid plan selected');
       }
 
-      // Convert price to PHP
-      const amountInPHP = convertToPHP(selectedPlan.price);
+      // Price is already in PHP
+      const amountInPHP = selectedPlan.price;
 
       // Check wallet balance
       if (balance < amountInPHP) {
@@ -1405,7 +1914,7 @@ const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => 
       
       {/* Renewal Modal */}
       {showRenewModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Renew Listing</h3>
             <p className="text-gray-600 mb-4">
@@ -1414,11 +1923,11 @@ const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => 
             
             <div className="space-y-3 mb-6">
               {[
-                { id: 'basic', name: 'Basic', duration: '3 months', price: 9.99 },
-                { id: 'professional', name: 'Professional', duration: '12 months', price: 19.99 },
-                { id: 'enterprise', name: 'Enterprise', duration: '3 years', price: 49.99 }
+                { id: 'starter', name: 'Starter', duration: '1 year', price: 399 },
+                { id: 'pro', name: 'Pro', duration: '1 year', price: 799 },
+                { id: 'elite', name: 'Elite', duration: '1 year', price: 1299 }
               ].map(plan => {
-                const priceInPHP = convertToPHP(plan.price);
+                const priceInPHP = plan.price; // Already in PHP
                 return (
                   <button
                     key={plan.id}
@@ -1892,7 +2401,7 @@ const DashboardOverview = ({ stats, listings, bookings }) => {
     
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       {/* Quick Actions */}
-      <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
+      {/* <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
         <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
           <span className="w-2 h-2 bg-teal-500 rounded-full mr-3 animate-pulse"></span>
           Quick Actions
@@ -1946,7 +2455,7 @@ const DashboardOverview = ({ stats, listings, bookings }) => {
             <span className="text-gray-400 group-hover:text-teal-600 transition-all duration-300">→</span>
           </Link>
         </div>
-      </div>
+      </div> */}
 
       {/* Bookings Section - Today/Upcoming */}
       <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
@@ -2238,11 +2747,6 @@ const BookingsSection = ({ bookings, listings }) => {
   const [filterAmountMin, setFilterAmountMin] = useState('');
   const [filterAmountMax, setFilterAmountMax] = useState('');
   
-  // Bulk actions
-  const [selectedBookings, setSelectedBookings] = useState(new Set());
-  const [bulkAction, setBulkAction] = useState('');
-  const [showBulkActionModal, setShowBulkActionModal] = useState(false);
-  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const handleBookingAction = async (bookingId, action) => {
     if (action === 'accept' && !window.confirm('Accept this booking?')) return;
@@ -2432,72 +2936,6 @@ const BookingsSection = ({ bookings, listings }) => {
     return filtered;
   }, [bookings, filter, sortBy, searchQuery, filterListing, filterDateFrom, filterDateTo, filterAmountMin, filterAmountMax]);
 
-  // Handle bulk selection
-  const handleSelectBooking = (bookingId) => {
-    setSelectedBookings(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(bookingId)) {
-        newSet.delete(bookingId);
-      } else {
-        newSet.add(bookingId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedBookings.size === filteredBookings.length) {
-      setSelectedBookings(new Set());
-    } else {
-      setSelectedBookings(new Set(filteredBookings.map(b => b.id)));
-    }
-  };
-
-  // Handle bulk actions
-  const handleBulkAction = async () => {
-    if (selectedBookings.size === 0) {
-      toast.error('Please select at least one booking');
-      return;
-    }
-
-    if (!bulkAction) {
-      toast.error('Please select an action');
-      return;
-    }
-
-    setBulkProcessing(true);
-    try {
-      const selectedIds = Array.from(selectedBookings);
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const bookingId of selectedIds) {
-        try {
-          await handleBookingAction(bookingId, bulkAction);
-          successCount++;
-        } catch (error) {
-          console.error(`Error processing booking ${bookingId}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(`${successCount} booking(s) ${bulkAction}ed successfully`);
-      }
-      if (failCount > 0) {
-        toast.error(`${failCount} booking(s) failed to ${bulkAction}`);
-      }
-
-      setSelectedBookings(new Set());
-      setShowBulkActionModal(false);
-      setBulkAction('');
-    } catch (error) {
-      console.error('Error in bulk action:', error);
-      toast.error('Failed to process bulk action');
-    } finally {
-      setBulkProcessing(false);
-    }
-  };
 
   // Export functions
   const handleExportCSV = () => {
@@ -2524,24 +2962,8 @@ const BookingsSection = ({ bookings, listings }) => {
             <p className="text-gray-600">Manage your current and upcoming bookings</p>
           </div>
           
-          {/* Export and Bulk Actions */}
+          {/* Export Actions */}
           <div className="flex flex-wrap gap-2">
-            {selectedBookings.size > 0 && (
-              <>
-                <button
-                  onClick={() => setShowBulkActionModal(true)}
-                  className="px-4 py-2 bg-[#4CAF50] text-white rounded-lg text-sm font-medium hover:bg-[#2E7D32] transition-colors flex items-center gap-2"
-                >
-                  <span>Bulk Action ({selectedBookings.size})</span>
-                </button>
-                <button
-                  onClick={() => setSelectedBookings(new Set())}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
-                >
-                  Clear Selection
-                </button>
-              </>
-            )}
             <button
               onClick={handleExportCSV}
               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -2711,127 +3133,97 @@ const BookingsSection = ({ bookings, listings }) => {
       
       {filteredBookings.length > 0 ? (
         <div className="space-y-4">
-          {/* Select All Checkbox */}
-          <div className="flex items-center gap-3 mb-2">
-            <input
-              type="checkbox"
-              checked={selectedBookings.size === filteredBookings.length && filteredBookings.length > 0}
-              onChange={handleSelectAll}
-              className="w-5 h-5 text-[#4CAF50] border-gray-300 rounded focus:ring-[#4CAF50] cursor-pointer"
-            />
-            <label className="text-sm font-medium text-gray-700 cursor-pointer">
-              Select All ({selectedBookings.size} selected)
-            </label>
-          </div>
-
           {filteredBookings.map((booking, index) => {
             const checkIn = booking.checkIn instanceof Date ? booking.checkIn : new Date(booking.checkIn);
             const checkOut = booking.checkOut instanceof Date ? booking.checkOut : new Date(booking.checkOut);
             const isProcessing = processing[booking.id];
-            const isSelected = selectedBookings.has(booking.id);
 
             return (
               <div 
                 key={booking.id} 
-                className={`bg-white border-2 rounded-xl p-6 hover:shadow-md transition-all ${
-                  isSelected ? 'border-[#4CAF50] bg-[#F1F8F4]' : 'border-gray-200'
-                }`}
+                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:shadow-md transition-all"
                 data-aos="fade-up"
                 data-aos-delay={index * 50}
               >
-                <div className="flex items-start gap-4 mb-4">
-                  {/* Bulk Selection Checkbox */}
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleSelectBooking(booking.id);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-5 h-5 text-[#4CAF50] border-gray-300 rounded focus:ring-[#4CAF50] cursor-pointer mt-1 flex-shrink-0"
-                  />
-                  
-                  <div 
-                    className="flex-1 cursor-pointer"
-                    onClick={() => {
-                      setSelectedBooking(booking);
-                      setShowBookingModal(true);
-                    }}
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-gray-900">
-                        {booking.guestName || booking.guestEmail || 'Guest'}
-                      </h3>
-                      {getStatusBadge(booking.status)}
-                      {booking.status === 'pending' && booking.createdAt && (() => {
-                        try {
-                          const { getAutoConfirmEligibility } = require('../../services/BookingAutoConfirmService');
-                          const eligibility = getAutoConfirmEligibility(booking);
-                          if (eligibility.remainingHours > 0 && eligibility.remainingHours <= 24) {
-                            return (
-                              <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-                                Auto-confirms in {eligibility.remainingHours}h
-                              </span>
-                            );
-                          }
-                        } catch (e) {}
-                        return null;
-                      })()}
-                      {booking.autoConfirmed && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                          Auto-confirmed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 mb-1">{booking.listingTitle || 'Listing'}</p>
-                    <p className="text-xs text-gray-500">Booking ID: {booking.id.slice(0, 8)}...</p>
-                    
-                    {/* Check-in Reminder Indicator */}
-                    {booking.status === 'confirmed' && booking.checkIn && (() => {
-                      const checkInDate = booking.checkIn instanceof Date ? booking.checkIn : new Date(booking.checkIn);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const checkInDateOnly = new Date(checkInDate);
-                      checkInDateOnly.setHours(0, 0, 0, 0);
-                      const daysUntil = Math.ceil((checkInDateOnly.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                      if (daysUntil >= 0 && daysUntil <= 7) {
-                        return (
-                          <div className="mt-2 mb-2">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              daysUntil === 0 ? 'bg-orange-100 text-orange-700' : 
-                              daysUntil === 1 ? 'bg-yellow-100 text-yellow-700' : 
-                              'bg-blue-100 text-blue-700'
-                            }`}>
-                              {daysUntil === 0 ? '🔔 Check-in today!' : 
-                               daysUntil === 1 ? '🔔 Check-in tomorrow' : 
-                               `📅 Check-in in ${daysUntil} days`}
+                <div 
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setSelectedBooking(booking);
+                    setShowBookingModal(true);
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="font-semibold text-gray-900">
+                      {booking.guestName || booking.guestEmail || 'Guest'}
+                    </h3>
+                    {getStatusBadge(booking.status)}
+                    {booking.status === 'pending' && booking.createdAt && (() => {
+                      try {
+                        const { getAutoConfirmEligibility } = require('../../services/BookingAutoConfirmService');
+                        const eligibility = getAutoConfirmEligibility(booking);
+                        if (eligibility.remainingHours > 0 && eligibility.remainingHours <= 24) {
+                          return (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                              Auto-confirms in {eligibility.remainingHours}h
                             </span>
-                          </div>
-                        );
-                      }
+                          );
+                        }
+                      } catch (e) {}
                       return null;
                     })()}
-                    
-                    <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                      <div>
-                        <p className="text-gray-500">Check-in</p>
-                        <p className="font-medium text-gray-900">{formatDate(checkIn)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Check-out</p>
-                        <p className="font-medium text-gray-900">{formatDate(checkOut)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Guests</p>
-                        <p className="font-medium text-gray-900">{booking.guestCount || 1}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500">Amount</p>
-                        <p className="font-medium text-gray-900">
-                          ₱{booking.totalAmount?.toLocaleString('en-PH', { minimumFractionDigits: 2 }) || '0.00'}
-                        </p>
-                      </div>
+                    {booking.autoConfirmed && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        Auto-confirmed
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">{booking.listingTitle || 'Listing'}</p>
+                  <p className="text-xs text-gray-500">Booking ID: {booking.id.slice(0, 8)}...</p>
+                  
+                  {/* Check-in Reminder Indicator */}
+                  {booking.status === 'confirmed' && booking.checkIn && (() => {
+                    const checkInDate = booking.checkIn instanceof Date ? booking.checkIn : new Date(booking.checkIn);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const checkInDateOnly = new Date(checkInDate);
+                    checkInDateOnly.setHours(0, 0, 0, 0);
+                    const daysUntil = Math.ceil((checkInDateOnly.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysUntil >= 0 && daysUntil <= 7) {
+                      return (
+                        <div className="mt-2 mb-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            daysUntil === 0 ? 'bg-orange-100 text-orange-700' : 
+                            daysUntil === 1 ? 'bg-yellow-100 text-yellow-700' : 
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {daysUntil === 0 ? '🔔 Check-in today!' : 
+                             daysUntil === 1 ? '🔔 Check-in tomorrow' : 
+                             `📅 Check-in in ${daysUntil} days`}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Check-in</p>
+                      <p className="font-medium text-gray-900">{formatDate(checkIn)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Check-out</p>
+                      <p className="font-medium text-gray-900">{formatDate(checkOut)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Guests</p>
+                      <p className="font-medium text-gray-900">{booking.guestCount || 1}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Amount</p>
+                      <p className="font-medium text-gray-900">
+                        ₱{booking.totalAmount?.toLocaleString('en-PH', { minimumFractionDigits: 2 }) || '0.00'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -2920,62 +3312,9 @@ const BookingsSection = ({ bookings, listings }) => {
         />
       )}
 
-      {/* Bulk Action Modal */}
-      {showBulkActionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBulkActionModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Bulk Action</h3>
-              <button
-                onClick={() => setShowBulkActionModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <p className="text-gray-600 mb-4">
-              Apply action to <strong>{selectedBookings.size}</strong> selected booking(s)
-            </p>
-            
-            <div className="space-y-3 mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Action:</label>
-              <select
-                value={bulkAction}
-                onChange={(e) => setBulkAction(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4CAF50] focus:border-transparent"
-              >
-                <option value="">Choose an action...</option>
-                <option value="accept">Accept Bookings</option>
-                <option value="reject">Reject Bookings</option>
-                <option value="cancel">Cancel Bookings</option>
-              </select>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowBulkActionModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBulkAction}
-                disabled={!bulkAction || bulkProcessing}
-                className="flex-1 px-4 py-2 bg-[#4CAF50] text-white rounded-lg font-medium hover:bg-[#2E7D32] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {bulkProcessing ? 'Processing...' : 'Apply Action'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Booking Details Modal */}
       {showBookingModal && selectedBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowBookingModal(false)}>
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-50 flex items-center justify-center p-4" onClick={() => setShowBookingModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">Booking Details</h3>
@@ -3270,10 +3609,10 @@ const MessagesSection = ({ messages }) => {
             id: `conv_${guestId}`,
             guestId: guestId,
             guestName: msg.guestName || msg.guestEmail || 'Guest',
-            guestEmail: msg.guestEmail,
+            guestEmail: msg.guestEmail || '', // Ensure it's never undefined
             guestPhoto: msg.guestPhoto,
-            listingId: msg.listingId,
-            listingTitle: msg.listingTitle,
+            listingId: msg.listingId || '',
+            listingTitle: msg.listingTitle || '',
             lastMessage: msg.content,
             lastMessageTime: msg.timestamp,
             unreadCount: msg.read === false ? 1 : 0,
@@ -3282,7 +3621,27 @@ const MessagesSection = ({ messages }) => {
         } else {
           const conv = conversationMap.get(guestId);
           conv.messages.push(msg);
-          if (msg.timestamp > conv.lastMessageTime || !conv.lastMessageTime) {
+          // Update guestEmail if it's missing but available in this message
+          if (!conv.guestEmail && msg.guestEmail) {
+            conv.guestEmail = msg.guestEmail;
+          }
+          // Update other fields if missing
+          if (!conv.guestName && msg.guestName) {
+            conv.guestName = msg.guestName;
+          }
+          if (!conv.guestPhoto && msg.guestPhoto) {
+            conv.guestPhoto = msg.guestPhoto;
+          }
+          if (!conv.listingId && msg.listingId) {
+            conv.listingId = msg.listingId;
+          }
+          if (!conv.listingTitle && msg.listingTitle) {
+            conv.listingTitle = msg.listingTitle;
+          }
+          // Update last message if this one is newer
+          const msgTime = msg.timestamp?.getTime ? msg.timestamp.getTime() : (msg.timestamp instanceof Date ? msg.timestamp.getTime() : 0);
+          const convTime = conv.lastMessageTime?.getTime ? conv.lastMessageTime.getTime() : (conv.lastMessageTime instanceof Date ? conv.lastMessageTime.getTime() : 0);
+          if (msgTime > convTime || !conv.lastMessageTime) {
             conv.lastMessage = msg.content;
             conv.lastMessageTime = msg.timestamp;
           }
@@ -3291,11 +3650,39 @@ const MessagesSection = ({ messages }) => {
           }
         }
       });
-
-      const conversationsList = Array.from(conversationMap.values())
-        .sort((a, b) => (b.lastMessageTime?.getTime() || 0) - (a.lastMessageTime?.getTime() || 0));
       
-      setConversations(conversationsList);
+      // Fetch missing guest emails from user documents
+      const conversationsList = Array.from(conversationMap.values());
+      await Promise.all(conversationsList.map(async (conv) => {
+        if (!conv.guestEmail && conv.guestId) {
+          try {
+            const guestDoc = await getDoc(doc(db, 'users', conv.guestId));
+            if (guestDoc.exists()) {
+              const guestData = guestDoc.data();
+              conv.guestEmail = guestData.email || '';
+              if (!conv.guestName && guestData.displayName) {
+                conv.guestName = guestData.displayName;
+              }
+              if (!conv.guestPhoto && guestData.photoURL) {
+                conv.guestPhoto = guestData.photoURL;
+              }
+            }
+          } catch (error) {
+            console.warn('Could not fetch guest data for conversation:', error);
+            // Keep empty string as fallback
+            conv.guestEmail = conv.guestEmail || '';
+          }
+        }
+      }));
+
+      // Sort conversations by last message time (create a new array to avoid mutation)
+      const sortedConversations = [...conversationsList].sort((a, b) => {
+        const timeA = a.lastMessageTime?.getTime() || 0;
+        const timeB = b.lastMessageTime?.getTime() || 0;
+        return timeB - timeA;
+      });
+      
+      setConversations(sortedConversations);
     } catch (error) {
       console.error('❌ Error loading conversations:', error);
       setConversations([]);
@@ -3376,28 +3763,95 @@ const MessagesSection = ({ messages }) => {
 
     try {
       setSending(true);
+      
+      // Fetch guest email if it's not available in the conversation
+      let guestEmail = conversation.guestEmail;
+      if (!guestEmail && conversation.guestId) {
+        try {
+          const guestDoc = await getDoc(doc(db, 'users', conversation.guestId));
+          if (guestDoc.exists()) {
+            guestEmail = guestDoc.data().email || '';
+          }
+        } catch (error) {
+          console.warn('Could not fetch guest email:', error);
+          guestEmail = ''; // Use empty string as fallback
+        }
+      }
+
       await addDoc(collection(db, 'messages'), {
         hostId: currentUser.uid,
         hostName: currentUser.displayName || currentUser.email,
         hostPhoto: currentUser.photoURL,
         guestId: conversation.guestId,
-        guestName: conversation.guestName,
-        guestEmail: conversation.guestEmail,
-        listingId: conversation.listingId,
-        listingTitle: conversation.listingTitle,
+        guestName: conversation.guestName || 'Guest',
+        guestEmail: guestEmail || '', // Ensure it's never undefined
+        guestPhoto: conversation.guestPhoto,
+        listingId: conversation.listingId || '',
+        listingTitle: conversation.listingTitle || '',
         content: newMessage.trim(),
         senderId: currentUser.uid,
         senderType: 'host',
+        type: 'text',
         read: false,
         timestamp: serverTimestamp()
       });
 
+      // Update or create conversation document
+      await updateOrCreateConversation(conversation, newMessage.trim(), 'text');
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const updateOrCreateConversation = async (conversation, lastMessage, type) => {
+    try {
+      const convId = `guest_${conversation.guestId}_host_${currentUser.uid}`;
+      const conversationRef = doc(db, 'conversations', convId);
+      const conversationSnap = await getDoc(conversationRef);
+
+      if (conversationSnap.exists()) {
+        await updateDoc(conversationRef, {
+          lastMessage: lastMessage,
+          lastMessageTime: serverTimestamp(),
+          lastMessageType: type
+        });
+      } else {
+        // Fetch guest email if not available
+        let guestEmail = conversation.guestEmail || '';
+        if (!guestEmail && conversation.guestId) {
+          try {
+            const guestDoc = await getDoc(doc(db, 'users', conversation.guestId));
+            if (guestDoc.exists()) {
+              guestEmail = guestDoc.data().email || '';
+            }
+          } catch (error) {
+            console.warn('Could not fetch guest email for conversation:', error);
+          }
+        }
+
+        await setDoc(conversationRef, {
+          id: convId,
+          guestId: conversation.guestId,
+          guestName: conversation.guestName || 'Guest',
+          guestEmail: guestEmail || '', // Ensure it's never undefined
+          guestPhoto: conversation.guestPhoto,
+          hostId: currentUser.uid,
+          hostName: currentUser.displayName || currentUser.email,
+          listingId: conversation.listingId || '',
+          listingTitle: conversation.listingTitle || '',
+          lastMessage: lastMessage,
+          lastMessageTime: serverTimestamp(),
+          lastMessageType: type,
+          createdAt: serverTimestamp(),
+          unreadCount: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error updating conversation:', error);
     }
   };
 
@@ -3423,7 +3877,7 @@ const MessagesSection = ({ messages }) => {
   }
 
   return (
-    <div className="p-8 h-[calc(100vh-200px)] flex flex-col">
+    <div className="p-8 h-[calc(250vh-200px)] flex flex-col">
       <h2 className="text-2xl font-bold text-gray-900 mb-4">Guest Messages</h2>
       
       <div className="flex-1 flex border border-gray-200 rounded-xl overflow-hidden bg-white">
@@ -3713,9 +4167,8 @@ const CalendarSection = ({ bookings, listings }) => {
         setTempRangeDates([date.toISOString().split('T')[0]]);
       }
     } else {
-      // Normal single date block/unblock
-      setSelectedDate(date);
-      setShowBlockModal(true);
+      // Show booking details modal for any date (with or without bookings)
+      setSelectedBookingDate(date);
     }
   };
 
@@ -4061,12 +4514,10 @@ const CalendarSection = ({ bookings, listings }) => {
               <div
                 key={idx}
                 onClick={() => {
-                  if (isCurrentMonth) {
-                    if (dateBookings.length > 0) {
-                      setSelectedBookingDate(dateObj);
-                    } else if (selectedListing !== 'all') {
-                      handleDateClick(dateObj);
-                    }
+                  if (isCurrentMonth && !rangeBlockMode) {
+                    handleDateClick(dateObj);
+                  } else if (isCurrentMonth && rangeBlockMode) {
+                    handleDateClick(dateObj);
                   }
                 }}
                 onMouseEnter={() => setHoveredDate(dateObj)}
@@ -4231,95 +4682,135 @@ const CalendarSection = ({ bookings, listings }) => {
         </div>
       </div>
 
-      {/* Booking Details Modal */}
+      {/* Booking Details Modal - Enhanced Design */}
       {selectedBookingDate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedBookingDate(null)}>
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">
-                Bookings for {selectedBookingDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </h3>
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={() => setSelectedBookingDate(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Orange Header */}
+            <div className="bg-[#FF6B35] text-white p-6 rounded-t-2xl relative">
               <button
                 onClick={() => setSelectedBookingDate(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full p-2 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+              <h3 className="text-2xl font-bold mb-1">
+                {selectedBookingDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </h3>
+              <p className="text-white/90 text-sm">Manage bookings and availability</p>
             </div>
-            
-            {getBookingsForDate(selectedBookingDate).length === 0 ? (
-              <p className="text-gray-600">No bookings for this date</p>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {getBookingsForDate(selectedBookingDate).map(booking => {
-                  const checkIn = booking.checkIn instanceof Date ? booking.checkIn : new Date(booking.checkIn);
-                  const checkOut = booking.checkOut instanceof Date ? booking.checkOut : new Date(booking.checkOut);
-                  const bookingStatus = booking.status || 'pending';
-                  
-                  return (
-                    <div
-                      key={booking.id}
-                      className={`p-4 rounded-lg border-2 ${
-                        bookingStatus === 'confirmed' ? 'border-green-200 bg-green-50' :
-                        bookingStatus === 'completed' ? 'border-gray-200 bg-gray-50' :
-                        bookingStatus === 'cancelled' ? 'border-red-200 bg-red-50' :
-                        'border-yellow-200 bg-yellow-50'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{booking.guestName || 'Guest'}</h4>
-                          <p className="text-sm text-gray-600">{booking.listingTitle || 'Unknown Listing'}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          bookingStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
-                          bookingStatus === 'completed' ? 'bg-gray-100 text-gray-700' :
-                          bookingStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {bookingStatus}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm mt-3">
-                        <div>
-                          <p className="text-gray-500 text-xs">Check-in</p>
-                          <p className="font-semibold text-gray-900">{checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 text-xs">Check-out</p>
-                          <p className="font-semibold text-gray-900">{checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 text-xs">Guests</p>
-                          <p className="font-semibold text-gray-900">{booking.guests || 1} {booking.guests === 1 ? 'guest' : 'guests'}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 text-xs">Total Amount</p>
-                          <p className="font-semibold text-teal-600">₱{parseFloat(booking.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <Link
-                          to={`/messages?guest=${booking.guestId}&listing=${booking.listingId}`}
-                          className="text-sm text-teal-600 hover:text-teal-700 font-semibold"
+
+            {/* White Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Bookings Section */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold text-gray-900">Bookings</h4>
+                  <span className="text-sm text-gray-600 font-semibold">
+                    {getBookingsForDate(selectedBookingDate).length} booking{getBookingsForDate(selectedBookingDate).length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                
+                {getBookingsForDate(selectedBookingDate).length === 0 ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                    <p className="text-gray-600 font-medium">No bookings for this date.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {getBookingsForDate(selectedBookingDate).map(booking => {
+                      const checkIn = booking.checkIn instanceof Date ? booking.checkIn : new Date(booking.checkIn);
+                      const checkOut = booking.checkOut instanceof Date ? booking.checkOut : new Date(booking.checkOut);
+                      const bookingStatus = booking.status || 'pending';
+                      
+                      return (
+                        <div
+                          key={booking.id}
+                          className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                         >
-                          Message Guest →
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h5 className="font-bold text-gray-900 text-lg mb-1">{booking.guestName || 'Guest'}</h5>
+                              <p className="text-sm text-gray-600 mb-2">{booking.listingTitle || 'Unknown Listing'}</p>
+                              <div className="flex items-center gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Check-in: </span>
+                                  <span className="font-semibold text-gray-900">{checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Check-out: </span>
+                                  <span className="font-semibold text-gray-900">{checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Guests: </span>
+                                  <span className="font-semibold text-gray-900">{booking.guests || 1}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <span className="text-gray-500 text-sm">Total: </span>
+                                <span className="font-bold text-teal-600 text-lg">₱{parseFloat(booking.totalAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                bookingStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                bookingStatus === 'completed' ? 'bg-gray-100 text-gray-700' :
+                                bookingStatus === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {bookingStatus.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                          {booking.guestId && booking.listingId && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <Link
+                                to={`/host/messages?guest=${booking.guestId}&listing=${booking.listingId}`}
+                                className="text-sm text-teal-600 hover:text-teal-700 font-semibold inline-flex items-center gap-1"
+                              >
+                                Message Guest
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Date Actions Section */}
+              {selectedListing !== 'all' && (
+                <div>
+                  <h4 className="text-lg font-bold text-gray-900 mb-4">Date Actions</h4>
+                  <button
+                    onClick={async () => {
+                      await handleBlockDate(selectedBookingDate);
+                      setSelectedBookingDate(null);
+                    }}
+                    disabled={loading}
+                    className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      blockedDates.includes(selectedBookingDate.toISOString().split('T')[0])
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-gray-800 hover:bg-gray-900 text-white'
+                    }`}
+                  >
+                    {loading ? 'Processing...' : blockedDates.includes(selectedBookingDate.toISOString().split('T')[0]) ? 'Unblock Date' : 'Block Date'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Block/Unblock Modal */}
       {showBlockModal && selectedDate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
               {blockedDates.includes(selectedDate.toISOString().split('T')[0]) ? 'Unblock Date' : 'Block Date'}
@@ -4356,31 +4847,911 @@ const CalendarSection = ({ bookings, listings }) => {
   );
 };
 
-const CouponsSection = () => {
-  const navigate = useNavigate();
-  
-  const handleGoToCoupons = () => {
-    sessionStorage.setItem('settingsTab', 'coupons');
-    navigate('/host/settings');
+// Subscription Section Component
+const SubscriptionSection = ({ hostSubscription, balance, listings, onSubscriptionUpdate }) => {
+  const { currentUser } = useAuth();
+  const { deduct } = useWallet();
+  const [showAddSlotsModal, setShowAddSlotsModal] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+
+  const subscriptionPlan = getSubscriptionPlan(hostSubscription.planId);
+  const listingAvailability = canCreateListing(
+    hostSubscription.planId,
+    listings.length,
+    hostSubscription.additionalSlots
+  );
+
+  // Calculate bulk pricing (existing hosts get bulk discounts)
+  const bulkPricing = getBulkSlotPricing(quantity, 'oneTime', true); // true = existing host
+  const priceInPHP = convertToPHP(bulkPricing.price);
+
+  const handlePurchaseSlots = async () => {
+    setProcessing(true);
+    try {
+      if (balance < priceInPHP) {
+        toast.error(`Insufficient balance. You need ₱${priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
+        return;
+      }
+
+      // Deduct from wallet
+      await deduct(priceInPHP, `Additional Listing Slots: ${quantity} slot(s) - One-Time`);
+
+      // Update host subscription in Firestore
+      const hostDocRef = doc(db, 'hosts', currentUser.uid);
+      const currentSlots = hostSubscription.additionalSlots || 0;
+      await updateDoc(hostDocRef, {
+        additionalListingSlots: currentSlots + quantity,
+        slotType: 'oneTime',
+        updatedAt: serverTimestamp()
+      });
+
+      // Refresh subscription data
+      if (onSubscriptionUpdate) {
+        await onSubscriptionUpdate();
+      }
+
+      toast.success(`Successfully purchased ${quantity} additional listing slot(s)! ${bulkPricing.savings > 0 ? `You saved ₱${convertToPHP(bulkPricing.savings).toLocaleString('en-PH', { minimumFractionDigits: 2 })}!` : ''}`);
+      setShowAddSlotsModal(false);
+      setQuantity(1);
+    } catch (error) {
+      console.error('Error purchasing slots:', error);
+      toast.error('Failed to purchase slots. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
     <div className="p-8">
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Coupon Management</h2>
-      <p className="text-gray-600 mb-8">Create and manage discount coupons</p>
-      <div className="text-center py-16">
-        <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <span className="text-4xl">🎫</span>
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">Subscription & Listing Slots</h2>
+        <p className="text-gray-600">Manage your subscription plan and purchase additional listing slots</p>
+      </div>
+
+      {/* Current Subscription Info */}
+      <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border-2 border-teal-200 rounded-xl p-6 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              {subscriptionPlan.name} Plan
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600">Listings Used: </span>
+                <span className="font-bold text-gray-900">{listings.length}</span>
+                <span className="text-gray-600"> / </span>
+                <span className={`font-bold ${listingAvailability.remaining === 0 ? 'text-red-600' : 'text-teal-600'}`}>
+                  {subscriptionPlan.listingLimit + hostSubscription.additionalSlots}
+                </span>
+              </div>
+              {hostSubscription.additionalSlots > 0 && (
+                <div className="text-xs text-gray-500">
+                  (+{hostSubscription.additionalSlots} additional slot{hostSubscription.additionalSlots !== 1 ? 's' : ''})
+                </div>
+              )}
+              {listingAvailability.remaining > 0 && (
+                <div className="text-teal-700 font-semibold">
+                  {listingAvailability.remaining} slot{listingAvailability.remaining !== 1 ? 's' : ''} available
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-600 mb-1">Monthly Price</p>
+            <p className="text-2xl font-bold text-teal-600">₱{convertToPHP(subscriptionPlan.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+          </div>
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 mb-3">No coupons yet</h3>
-        <p className="text-gray-600 max-w-md mx-auto mb-6">Create coupons to attract more guests to your listings</p>
+      </div>
+
+      {/* Purchase Additional Slots Section */}
+      <div className="bg-white border-2 border-gray-200 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Purchase Additional Listing Slots</h3>
+        <p className="text-gray-600 mb-6">
+          Need more listings? Purchase additional slots with bulk discounts! Existing hosts get special pricing.
+        </p>
+
+        {/* Bulk Pricing Tiers */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[1, 3, 5, 10].map((qty) => {
+            const tierPricing = getBulkSlotPricing(qty, 'oneTime', true);
+            const tierPricePHP = convertToPHP(tierPricing.price);
+            const regularPricePHP = convertToPHP(tierPricing.regularPrice);
+            const savings = tierPricing.savings > 0;
+
+            return (
+              <div
+                key={qty}
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                  quantity === qty && slotType === 'oneTime'
+                    ? 'border-teal-500 bg-teal-50 shadow-lg'
+                    : 'border-gray-200 hover:border-teal-300'
+                }`}
+                onClick={() => {
+                  setQuantity(qty);
+                  setSlotType('oneTime');
+                }}
+              >
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900 mb-1">{qty}</div>
+                  <div className="text-xs text-gray-500 mb-2">slot{qty !== 1 ? 's' : ''}</div>
+                  <div className="text-lg font-bold text-teal-600 mb-1">
+                    ₱{tierPricePHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </div>
+                  {savings && (
+                    <div className="text-xs text-gray-500 line-through mb-1">
+                      ₱{regularPricePHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                  {savings && (
+                    <div className="text-xs font-semibold text-green-600">
+                      Save ₱{convertToPHP(tierPricing.savings).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Purchase Button */}
         <button
-          onClick={handleGoToCoupons}
-          className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all duration-300 font-semibold inline-block"
+          onClick={() => setShowAddSlotsModal(true)}
+          className="w-full py-3 px-4 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all duration-300"
         >
-          Create Coupon
+          Purchase Listing Slots
         </button>
       </div>
+
+      {/* Current Plan Features */}
+      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Plan Features</h3>
+        <ul className="space-y-2">
+          {subscriptionPlan.features.map((feature, idx) => (
+            <li key={idx} className="flex items-center gap-2 text-gray-700">
+              <span className="text-teal-600">✓</span>
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Add Slots Modal */}
+      {showAddSlotsModal && (
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={() => setShowAddSlotsModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-900">Purchase Additional Listing Slots</h3>
+                <button
+                  onClick={() => setShowAddSlotsModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Payment Type Info */}
+              <div className="bg-teal-50 border-2 border-teal-200 rounded-lg p-4">
+                <p className="font-semibold text-gray-900 mb-1">{ADDITIONAL_LISTING_PRICES.oneTime.name}</p>
+                <p className="text-xs text-gray-600">{ADDITIONAL_LISTING_PRICES.oneTime.description}</p>
+              </div>
+
+              {/* Quantity Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-10 h-10 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                      setQuantity(val);
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-center"
+                  />
+                  <button
+                    onClick={() => setQuantity(quantity + 1)}
+                    className="w-10 h-10 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Price Summary with Bulk Discount */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                {bulkPricing.isBulk && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600">Regular Price:</span>
+                    <span className="text-sm text-gray-500 line-through">₱{convertToPHP(bulkPricing.regularPrice).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Price per slot:</span>
+                  <span className="font-semibold text-gray-900">₱{convertToPHP(bulkPricing.perSlot).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-600">Quantity:</span>
+                  <span className="font-semibold text-gray-900">{quantity}</span>
+                </div>
+                {bulkPricing.savings > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-green-600 font-semibold">You Save:</span>
+                    <span className="text-green-600 font-bold">₱{convertToPHP(bulkPricing.savings).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-300">
+                  <span className="text-lg font-bold text-gray-900">Total:</span>
+                  <span className="text-lg font-bold text-teal-600">₱{priceInPHP.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {/* Purchase Button */}
+              <button
+                onClick={handlePurchaseSlots}
+                disabled={processing || balance < priceInPHP}
+                className={`w-full py-3 px-4 rounded-lg font-semibold transition-colors ${
+                  balance < priceInPHP
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+                }`}
+              >
+                {processing ? 'Processing...' : balance < priceInPHP ? 'Insufficient Balance' : `Purchase ${quantity} Slot${quantity !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CouponsSection = () => {
+  const { currentUser } = useAuth();
+  const [coupons, setCoupons] = useState([]);
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    discountType: 'percentage',
+    discountValue: 10,
+    minAmount: 0,
+    maxDiscount: null,
+    validFrom: '',
+    validUntil: '',
+    usageLimit: null,
+    applicableTo: 'all'
+  });
+
+  // Coupon templates
+  const couponTemplates = [
+    {
+      name: 'Welcome Discount',
+      code: 'WELCOME10',
+      discountType: 'percentage',
+      discountValue: 10,
+      minAmount: 0,
+      maxDiscount: null,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: 100,
+      applicableTo: 'all',
+      description: 'Perfect for attracting new guests with a 10% welcome discount'
+    },
+    {
+      name: 'Early Bird Special',
+      code: 'EARLYBIRD15',
+      discountType: 'percentage',
+      discountValue: 15,
+      minAmount: 1000,
+      maxDiscount: 500,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: 50,
+      applicableTo: 'all',
+      description: 'Reward early bookings with 15% off (min ₱1,000, max ₱500 discount)'
+    },
+    {
+      name: 'Weekend Getaway',
+      code: 'WEEKEND20',
+      discountType: 'percentage',
+      discountValue: 20,
+      minAmount: 2000,
+      maxDiscount: 1000,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: null,
+      applicableTo: 'home',
+      description: 'Special weekend discount for home bookings (20% off, min ₱2,000)'
+    },
+    {
+      name: 'Fixed Amount Off',
+      code: 'SAVE500',
+      discountType: 'fixed',
+      discountValue: 500,
+      minAmount: 3000,
+      maxDiscount: null,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: 200,
+      applicableTo: 'all',
+      description: 'Flat ₱500 discount for bookings over ₱3,000'
+    },
+    {
+      name: 'Experience Special',
+      code: 'EXPERIENCE25',
+      discountType: 'percentage',
+      discountValue: 25,
+      minAmount: 1500,
+      maxDiscount: 750,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: 75,
+      applicableTo: 'experience',
+      description: 'Exclusive 25% discount for experience bookings'
+    },
+    {
+      name: 'Service Package',
+      code: 'SERVICE30',
+      discountType: 'percentage',
+      discountValue: 30,
+      minAmount: 2000,
+      maxDiscount: 1500,
+      validFrom: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      usageLimit: 100,
+      applicableTo: 'service',
+      description: 'Big savings on service bookings - 30% off!'
+    }
+  ];
+
+  useEffect(() => {
+    if (currentUser) {
+      loadCoupons();
+    }
+  }, [currentUser]);
+
+  const loadCoupons = async () => {
+    if (!currentUser) return;
+    try {
+      const q = query(
+        collection(db, 'coupons'),
+        where('hostId', '==', currentUser.uid)
+      );
+      const querySnapshot = await getDocs(q);
+      const couponsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : 
+          (doc.data().createdAt?.seconds ? new Date(doc.data().createdAt.seconds * 1000) : new Date())
+      })).sort((a, b) => {
+        return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0);
+      });
+      setCoupons(couponsList);
+    } catch (error) {
+      console.error('Error loading coupons:', error);
+      toast.error('Failed to load coupons');
+    }
+  };
+
+  const handleCouponSubmit = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setSaving(true);
+    try {
+      const couponData = {
+        ...couponForm,
+        hostId: currentUser.uid,
+        hostName: currentUser.displayName || currentUser.email,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        usageCount: 0,
+        isActive: true
+      };
+
+      if (editingCoupon) {
+        const couponRef = doc(db, 'coupons', editingCoupon.id);
+        await updateDoc(couponRef, {
+          ...couponData,
+          updatedAt: serverTimestamp()
+        });
+        toast.success('Coupon updated successfully!');
+      } else {
+        await addDoc(collection(db, 'coupons'), couponData);
+        toast.success('Coupon created successfully!');
+      }
+
+      setCouponForm({
+        code: '',
+        discountType: 'percentage',
+        discountValue: 10,
+        minAmount: 0,
+        maxDiscount: null,
+        validFrom: '',
+        validUntil: '',
+        usageLimit: null,
+        applicableTo: 'all'
+      });
+      setShowCouponForm(false);
+      setEditingCoupon(null);
+      loadCoupons();
+    } catch (error) {
+      console.error('Error saving coupon:', error);
+      toast.error('Failed to save coupon. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (couponId) => {
+    if (!window.confirm('Are you sure you want to delete this coupon?')) return;
+
+    try {
+      await deleteDoc(doc(db, 'coupons', couponId));
+      toast.success('Coupon deleted successfully!');
+      loadCoupons();
+    } catch (error) {
+      console.error('Error deleting coupon:', error);
+      toast.error('Failed to delete coupon. Please try again.');
+    }
+  };
+
+  const handleEditCoupon = (coupon) => {
+    setEditingCoupon(coupon);
+    
+    const formatDate = (dateValue) => {
+      if (!dateValue) return '';
+      if (dateValue.toDate) {
+        return dateValue.toDate().toISOString().split('T')[0];
+      }
+      if (dateValue.seconds) {
+        return new Date(dateValue.seconds * 1000).toISOString().split('T')[0];
+      }
+      if (typeof dateValue === 'string' && dateValue.includes('T')) {
+        return dateValue.split('T')[0];
+      }
+      return dateValue;
+    };
+    
+    setCouponForm({
+      code: coupon.code,
+      discountType: coupon.discountType || 'percentage',
+      discountValue: coupon.discountValue || 10,
+      minAmount: coupon.minAmount || 0,
+      maxDiscount: coupon.maxDiscount || null,
+      validFrom: formatDate(coupon.validFrom),
+      validUntil: formatDate(coupon.validUntil),
+      usageLimit: coupon.usageLimit || null,
+      applicableTo: coupon.applicableTo || 'all'
+    });
+    setShowCouponForm(true);
+  };
+
+  const handleUseTemplate = (template) => {
+    setCouponForm({
+      code: template.code,
+      discountType: template.discountType,
+      discountValue: template.discountValue,
+      minAmount: template.minAmount,
+      maxDiscount: template.maxDiscount,
+      validFrom: template.validFrom,
+      validUntil: template.validUntil,
+      usageLimit: template.usageLimit,
+      applicableTo: template.applicableTo
+    });
+    setShowTemplateModal(false);
+    setShowCouponForm(true);
+    setEditingCoupon(null);
+  };
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'N/A';
+    if (dateValue.toDate) {
+      return dateValue.toDate().toLocaleDateString();
+    }
+    if (dateValue.seconds) {
+      return new Date(dateValue.seconds * 1000).toLocaleDateString();
+    }
+    if (typeof dateValue === 'string') {
+      return new Date(dateValue).toLocaleDateString();
+    }
+    return 'N/A';
+  };
+
+  return (
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Coupon Management</h2>
+          <p className="text-gray-600">Create and manage discount coupons to attract more guests</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            View Templates
+          </button>
+          <button
+            onClick={() => {
+              setShowCouponForm(true);
+              setEditingCoupon(null);
+              setCouponForm({
+                code: '',
+                discountType: 'percentage',
+                discountValue: 10,
+                minAmount: 0,
+                maxDiscount: null,
+                validFrom: '',
+                validUntil: '',
+                usageLimit: null,
+                applicableTo: 'all'
+              });
+            }}
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Coupon
+          </button>
+        </div>
+      </div>
+
+      {/* Coupon Form */}
+      {showCouponForm && (
+        <form onSubmit={handleCouponSubmit} className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {editingCoupon ? 'Edit Coupon' : 'Create New Coupon'}
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCouponForm(false);
+                setEditingCoupon(null);
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Coupon Code *</label>
+              <input
+                type="text"
+                value={couponForm.code}
+                onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="SAVE10"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Discount Type *</label>
+              <select
+                value={couponForm.discountType}
+                onChange={(e) => setCouponForm({ ...couponForm, discountType: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+              >
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed Amount (₱)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Discount Value *</label>
+              <input
+                type="number"
+                min="0"
+                step={couponForm.discountType === 'percentage' ? '1' : '0.01'}
+                value={couponForm.discountValue}
+                onChange={(e) => setCouponForm({ ...couponForm, discountValue: parseFloat(e.target.value) })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Amount (₱)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={couponForm.minAmount}
+                onChange={(e) => setCouponForm({ ...couponForm, minAmount: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Max Discount (₱)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={couponForm.maxDiscount || ''}
+                onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value ? parseFloat(e.target.value) : null })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="No limit"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Valid From *</label>
+              <input
+                type="date"
+                value={couponForm.validFrom}
+                onChange={(e) => setCouponForm({ ...couponForm, validFrom: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until *</label>
+              <input
+                type="date"
+                value={couponForm.validUntil}
+                onChange={(e) => setCouponForm({ ...couponForm, validUntil: e.target.value })}
+                min={couponForm.validFrom}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Usage Limit</label>
+              <input
+                type="number"
+                min="1"
+                value={couponForm.usageLimit || ''}
+                onChange={(e) => setCouponForm({ ...couponForm, usageLimit: e.target.value ? parseInt(e.target.value) : null })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Unlimited"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Applicable To</label>
+              <select
+                value={couponForm.applicableTo}
+                onChange={(e) => setCouponForm({ ...couponForm, applicableTo: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="all">All Listings</option>
+                <option value="home">Homes Only</option>
+                <option value="experience">Experiences Only</option>
+                <option value="service">Services Only</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex space-x-4 mt-6">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Saving...' : editingCoupon ? 'Update Coupon' : 'Create Coupon'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCouponForm(false);
+                setEditingCoupon(null);
+              }}
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Coupons List */}
+      {coupons.length === 0 ? (
+        <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+          <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <span className="text-4xl">🎫</span>
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-3">No coupons yet</h3>
+          <p className="text-gray-600 max-w-md mx-auto mb-6">Create coupons to attract more guests to your listings</p>
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            className="px-6 py-3 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-colors inline-block mr-3"
+          >
+            View Templates
+          </button>
+          <button
+            onClick={() => {
+              setShowCouponForm(true);
+              setEditingCoupon(null);
+              setCouponForm({
+                code: '',
+                discountType: 'percentage',
+                discountValue: 10,
+                minAmount: 0,
+                maxDiscount: null,
+                validFrom: '',
+                validUntil: '',
+                usageLimit: null,
+                applicableTo: 'all'
+              });
+            }}
+            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors inline-block"
+          >
+            Create Custom
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {coupons.map((coupon) => (
+            <div key={coupon.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <h4 className="text-xl font-bold text-gray-900">{coupon.code}</h4>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      coupon.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {coupon.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Discount</p>
+                      <p className="text-lg font-semibold text-gray-900">
+                        {coupon.discountType === 'percentage' 
+                          ? `${coupon.discountValue}%` 
+                          : `₱${coupon.discountValue.toLocaleString('en-PH')}`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Valid Period</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(coupon.validFrom)} - {formatDate(coupon.validUntil)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Usage</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {coupon.usageCount || 0} / {coupon.usageLimit || '∞'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Applicable To</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">
+                        {coupon.applicableTo === 'all' ? 'All Listings' : coupon.applicableTo}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex space-x-2 ml-4">
+                  <button
+                    onClick={() => handleEditCoupon(coupon)}
+                    className="px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCoupon(coupon.id)}
+                    className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Template Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold text-gray-900">Coupon Templates</h3>
+                <button
+                  onClick={() => setShowTemplateModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">Choose a template to get started quickly</p>
+            </div>
+            <div className="p-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                {couponTemplates.map((template, index) => (
+                  <div
+                    key={index}
+                    className="border border-gray-200 rounded-lg p-5 hover:border-teal-500 hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => handleUseTemplate(template)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h4 className="font-semibold text-gray-900 mb-1">{template.name}</h4>
+                        <p className="text-sm font-mono text-teal-600 mb-2">{template.code}</p>
+                      </div>
+                      <span className="text-2xl">🎫</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">{template.description}</p>
+                    <div className="space-y-1 text-xs text-gray-500">
+                      <div className="flex justify-between">
+                        <span>Discount:</span>
+                        <span className="font-semibold text-gray-700">
+                          {template.discountType === 'percentage' 
+                            ? `${template.discountValue}%` 
+                            : `₱${template.discountValue.toLocaleString()}`}
+                        </span>
+                      </div>
+                      {template.minAmount > 0 && (
+                        <div className="flex justify-between">
+                          <span>Min Amount:</span>
+                          <span className="font-semibold text-gray-700">₱{template.minAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {template.maxDiscount && (
+                        <div className="flex justify-between">
+                          <span>Max Discount:</span>
+                          <span className="font-semibold text-gray-700">₱{template.maxDiscount.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Valid For:</span>
+                        <span className="font-semibold text-gray-700">
+                          {Math.ceil((new Date(template.validUntil) - new Date(template.validFrom)) / (1000 * 60 * 60 * 24))} days
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Usage Limit:</span>
+                        <span className="font-semibold text-gray-700">{template.usageLimit || 'Unlimited'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Applicable To:</span>
+                        <span className="font-semibold text-gray-700 capitalize">
+                          {template.applicableTo === 'all' ? 'All Listings' : template.applicableTo}
+                        </span>
+                      </div>
+                    </div>
+                    <button className="w-full mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 transition-colors">
+                      Use This Template
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4858,7 +6229,7 @@ const PaymentsSection = ({ bookings, listings }) => {
       
       {/* Payout Request Modal */}
       {showPayoutModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowPayoutModal(false)}>
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50" onClick={() => setShowPayoutModal(false)}>
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">Request Payout</h3>
@@ -5272,7 +6643,7 @@ const ReviewsSection = ({ listings, bookings }) => {
 
       {/* Response Modal */}
       {showResponseModal && selectedReview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
             <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">Respond to Review</h3>
@@ -5456,51 +6827,154 @@ const PointsSection = ({ stats, bookings, listings }) => {
     }
   };
 
-  // Badge rewards (unlocked once)
+  // Get current tier/rank based on points
+  const getCurrentTier = (points) => {
+    if (points >= 50000) return { name: 'Radiant', icon: '💎', color: 'from-purple-500 to-pink-500', points: 50000 };
+    if (points >= 30000) return { name: 'Immortal', icon: '👑', color: 'from-red-500 to-orange-500', points: 30000 };
+    if (points >= 20000) return { name: 'Diamond', icon: '💠', color: 'from-cyan-500 to-blue-500', points: 20000 };
+    if (points >= 10000) return { name: 'Platinum', icon: '🔷', color: 'from-gray-400 to-gray-600', points: 10000 };
+    if (points >= 5000) return { name: 'Gold', icon: '🥇', color: 'from-yellow-400 to-yellow-600', points: 5000 };
+    if (points >= 2000) return { name: 'Silver', icon: '🥈', color: 'from-gray-300 to-gray-400', points: 2000 };
+    if (points >= 500) return { name: 'Bronze', icon: '🥉', color: 'from-orange-600 to-orange-800', points: 500 };
+    return { name: 'Iron', icon: '⚙️', color: 'from-gray-500 to-gray-700', points: 0 };
+  };
+
+  const currentTier = getCurrentTier(totalPoints);
+  const nextTier = totalPoints < 50000 ? [
+    { name: 'Bronze', points: 500, icon: '🥉' },
+    { name: 'Silver', points: 2000, icon: '🥈' },
+    { name: 'Gold', points: 5000, icon: '🥇' },
+    { name: 'Platinum', points: 10000, icon: '🔷' },
+    { name: 'Diamond', points: 20000, icon: '💠' },
+    { name: 'Immortal', points: 30000, icon: '👑' },
+    { name: 'Radiant', points: 50000, icon: '💎' }
+  ].find(tier => totalPoints < tier.points) : null;
+
+  // Badge rewards (unlocked once) - Updated with new ranking system
   const badgeRewards = [
     {
+      id: 'iron',
+      name: 'Iron Rank',
+      pointsRequired: 0,
+      description: 'Starting rank - Welcome to EcoExpress!',
+      icon: '⚙️',
+      unlocked: totalPoints >= 0,
+      type: 'badge',
+      tier: 'Iron'
+    },
+    {
       id: 'bronze',
-      name: 'Bronze Badge',
-      pointsRequired: 100,
-      description: 'Achieve 100 points',
+      name: 'Bronze Rank',
+      pointsRequired: 500,
+      description: 'Achieve 500 points',
       icon: '🥉',
-      unlocked: totalPoints >= 100,
-      type: 'badge'
+      unlocked: totalPoints >= 500,
+      type: 'badge',
+      tier: 'Bronze'
     },
     {
       id: 'silver',
-      name: 'Silver Badge',
-      pointsRequired: 500,
-      description: 'Achieve 500 points',
+      name: 'Silver Rank',
+      pointsRequired: 2000,
+      description: 'Achieve 2,000 points',
       icon: '🥈',
-      unlocked: totalPoints >= 500,
-      type: 'badge'
+      unlocked: totalPoints >= 2000,
+      type: 'badge',
+      tier: 'Silver'
     },
     {
       id: 'gold',
-      name: 'Gold Badge',
-      pointsRequired: 1000,
-      description: 'Achieve 1000 points',
+      name: 'Gold Rank',
+      pointsRequired: 5000,
+      description: 'Achieve 5,000 points',
       icon: '🥇',
-      unlocked: totalPoints >= 1000,
-      type: 'badge'
+      unlocked: totalPoints >= 5000,
+      type: 'badge',
+      tier: 'Gold'
+    },
+    {
+      id: 'platinum',
+      name: 'Platinum Rank',
+      pointsRequired: 10000,
+      description: 'Achieve 10,000 points',
+      icon: '🔷',
+      unlocked: totalPoints >= 10000,
+      type: 'badge',
+      tier: 'Platinum'
+    },
+    {
+      id: 'diamond',
+      name: 'Diamond Rank',
+      pointsRequired: 20000,
+      description: 'Achieve 20,000 points',
+      icon: '💠',
+      unlocked: totalPoints >= 20000,
+      type: 'badge',
+      tier: 'Diamond'
+    },
+    {
+      id: 'immortal',
+      name: 'Immortal Rank',
+      pointsRequired: 30000,
+      description: 'Achieve 30,000 points',
+      icon: '👑',
+      unlocked: totalPoints >= 30000,
+      type: 'badge',
+      tier: 'Immortal'
+    },
+    {
+      id: 'radiant',
+      name: 'Radiant Rank',
+      pointsRequired: 50000,
+      description: 'Achieve 50,000 points - The highest rank!',
+      icon: '💎',
+      unlocked: totalPoints >= 50000,
+      type: 'badge',
+      tier: 'Radiant'
     },
     {
       id: 'featured',
       name: 'Featured Listing',
-      pointsRequired: 250,
-      description: 'Get your listing featured',
+      pointsRequired: 1000,
+      description: 'Get your listing featured (one-time)',
       icon: '⭐',
-      unlocked: totalPoints >= 250,
+      unlocked: totalPoints >= 1000,
       type: 'badge'
     },
     {
-      id: 'discount',
-      name: '10% Fee Discount',
-      pointsRequired: 750,
-      description: 'Reduce platform fees',
+      id: 'discount-5',
+      name: '5% Fee Discount',
+      pointsRequired: 2000,
+      description: 'Reduce platform fees by 5%',
       icon: '💰',
-      unlocked: totalPoints >= 750,
+      unlocked: totalPoints >= 2000,
+      type: 'badge'
+    },
+    {
+      id: 'discount-10',
+      name: '10% Fee Discount',
+      pointsRequired: 5000,
+      description: 'Reduce platform fees by 10%',
+      icon: '💰',
+      unlocked: totalPoints >= 5000,
+      type: 'badge'
+    },
+    {
+      id: 'priority-support',
+      name: 'Priority Support',
+      pointsRequired: 10000,
+      description: 'Get priority customer support',
+      icon: '🎧',
+      unlocked: totalPoints >= 10000,
+      type: 'badge'
+    },
+    {
+      id: 'verified-badge',
+      name: 'Verified Host Badge',
+      pointsRequired: 20000,
+      description: 'Get a verified host badge on your profile',
+      icon: '✓',
+      unlocked: totalPoints >= 20000,
       type: 'badge'
     }
   ];
@@ -5613,45 +7087,56 @@ const PointsSection = ({ stats, bookings, listings }) => {
       </div>
 
       {/* Points Display Card */}
-      <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-2xl shadow-xl p-8 mb-8 text-white">
+      <div className={`bg-gradient-to-br ${currentTier.color} rounded-2xl shadow-xl p-8 mb-8 text-white`}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-teal-100 text-sm mb-2">Your Total Points</p>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-4xl">{currentTier.icon}</span>
+              <div>
+                <p className="text-white/80 text-sm mb-1">Current Rank</p>
+                <h3 className="text-3xl font-bold">{currentTier.name}</h3>
+              </div>
+            </div>
+            <p className="text-white/90 text-sm mb-2 mt-3">Your Total Points</p>
             <h3 className="text-5xl font-bold">{totalPoints.toLocaleString()}</h3>
             {pointsLoading ? (
-              <p className="text-teal-100 text-xs mt-2">Loading...</p>
+              <p className="text-white/80 text-xs mt-2">Loading...</p>
             ) : (
               <div className="mt-2 space-y-1">
-                <p className="text-teal-100 text-sm">
+                <p className="text-white/90 text-sm">
                   Available: <span className="font-semibold">{availablePoints.toLocaleString()}</span> points
                 </p>
-                <p className="text-teal-200 text-xs">
+                <p className="text-white/80 text-xs">
                   Cash Value: ₱{calculateCashValue(availablePoints).toLocaleString()}
                 </p>
                 {redeemedPoints > 0 && (
-                  <p className="text-teal-200 text-xs">
+                  <p className="text-white/80 text-xs">
                     Redeemed: {redeemedPoints.toLocaleString()} points
                   </p>
                 )}
               </div>
             )}
           </div>
-          <div className="text-6xl opacity-30">🎁</div>
+          <div className="text-6xl opacity-30">{currentTier.icon}</div>
         </div>
         
-        {nextBadgeReward && (
+        {nextTier && (
           <div className="mt-6 bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <p className="text-sm text-teal-100 mb-2">
-              Next Badge: <span className="font-semibold">{nextBadgeReward.name}</span>
-            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">{nextTier.icon}</span>
+              <p className="text-sm text-white/90">
+                Next Rank: <span className="font-semibold">{nextTier.name}</span>
+              </p>
+            </div>
             <div className="w-full bg-white/20 rounded-full h-2 mb-1">
               <div 
                 className="bg-white h-2 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(progressToNext, 100)}%` }}
               ></div>
             </div>
-            <p className="text-xs text-teal-100">
-              {totalPoints} / {nextBadgeReward.pointsRequired} points
+            <p className="text-xs text-white/90">
+              {totalPoints.toLocaleString()} / {nextTier.points.toLocaleString()} points
+              <span className="ml-2">({nextTier.points - totalPoints} more needed)</span>
             </p>
           </div>
         )}
@@ -5693,12 +7178,56 @@ const PointsSection = ({ stats, bookings, listings }) => {
         </div>
       </div>
 
-      {/* Badge Rewards */}
+      {/* Ranking System */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Badge Rewards</h3>
-        <p className="text-sm text-gray-600 mb-4">Unlock badges as you reach milestones</p>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">🏆 Ranking System</h3>
+        <p className="text-sm text-gray-600 mb-4">Progress through ranks by earning points</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+          {[
+            { name: 'Iron', icon: '⚙️', points: 0, color: 'from-gray-500 to-gray-700' },
+            { name: 'Bronze', icon: '🥉', points: 500, color: 'from-orange-600 to-orange-800' },
+            { name: 'Silver', icon: '🥈', points: 2000, color: 'from-gray-300 to-gray-400' },
+            { name: 'Gold', icon: '🥇', points: 5000, color: 'from-yellow-400 to-yellow-600' },
+            { name: 'Platinum', icon: '🔷', points: 10000, color: 'from-gray-400 to-gray-600' },
+            { name: 'Diamond', icon: '💠', points: 20000, color: 'from-cyan-500 to-blue-500' },
+            { name: 'Immortal', icon: '👑', points: 30000, color: 'from-red-500 to-orange-500' },
+            { name: 'Radiant', icon: '💎', points: 50000, color: 'from-purple-500 to-pink-500' }
+          ].map((tier) => {
+            const isUnlocked = totalPoints >= tier.points;
+            const isCurrent = currentTier.name === tier.name;
+            return (
+              <div
+                key={tier.name}
+                className={`rounded-lg p-4 border-2 transition-all text-center ${
+                  isCurrent
+                    ? `border-teal-500 bg-gradient-to-br ${tier.color} text-white shadow-lg scale-105`
+                    : isUnlocked
+                    ? `border-teal-300 bg-teal-50`
+                    : 'border-gray-200 bg-gray-50 opacity-60'
+                }`}
+              >
+                <div className="text-3xl mb-2">{tier.icon}</div>
+                <div className="text-xs font-semibold mb-1">{tier.name}</div>
+                <div className={`text-xs ${isCurrent ? 'text-white/90' : 'text-gray-600'}`}>
+                  {tier.points.toLocaleString()}
+                </div>
+                {isCurrent && (
+                  <div className="mt-2 text-xs font-bold bg-white/20 px-2 py-1 rounded-full">
+                    Current
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Special Rewards */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">🎁 Special Rewards</h3>
+        <p className="text-sm text-gray-600 mb-4">Unlock special benefits as you reach milestones</p>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {badgeRewards.map((reward) => (
+          {badgeRewards.filter(r => !r.tier).map((reward) => (
             <div
               key={reward.id}
               className={`rounded-lg p-5 border-2 transition-all ${
@@ -5719,7 +7248,7 @@ const PointsSection = ({ stats, bookings, listings }) => {
               <p className="text-sm text-gray-600 mb-3">{reward.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">
-                  {reward.pointsRequired} points
+                  {reward.pointsRequired.toLocaleString()} points
                 </span>
                 {!reward.unlocked && (
                   <span className="text-xs text-gray-500">

@@ -310,7 +310,7 @@ function PublicServices() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-0">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-white to-amber-50/20 pt-0">
       {/* Hero Search Section */}
       <section className="relative text-white py-16 overflow-hidden">
         {/* Background Video */}
@@ -431,16 +431,15 @@ function PublicServices() {
                   </div>
                 </div>
               </div>
-            </div>
               
               {/* Middle Section - Filters and Listings Count */}
-              <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+              <div className={`border-t border-gray-200 px-4 py-3 flex items-center justify-between bg-white ${!showPriceFilter && !isClosingFilter ? 'rounded-b-2xl' : ''}`}>
                 <button
                   onClick={handleToggleFilter}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 delay-75 ${
                     showPriceFilter || searchFilters.maxPrice < 100000
-                      ? 'bg-teal-100 text-teal-600' 
-                      : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                      ? 'bg-teal-100 text-teal-600 border border-teal-300' 
+                      : 'bg-transparent text-gray-600 hover:bg-gray-100 border border-transparent'
                   }`}
                   title="Price filter"
                 >
@@ -466,7 +465,7 @@ function PublicServices() {
               
               {/* Bottom Section - Price Range Slider */}
               {(showPriceFilter || isClosingFilter) && (
-                <div className={`border-t border-gray-200 px-4 py-4 transition-all duration-500 ease-out overflow-hidden`} 
+                <div className={`border-t border-gray-200 px-4 py-4 transition-all duration-500 ease-out overflow-hidden bg-white rounded-b-2xl`} 
                   style={{ 
                     animation: isClosingFilter ? 'slideUp 0.5s ease-out forwards' : 'slideDown 0.5s ease-out forwards' 
                   }}>
@@ -492,6 +491,7 @@ function PublicServices() {
               )}
             </div>
           </div>
+        </div>
       </section>
 
       <div className="container mx-auto px-4 py-8">

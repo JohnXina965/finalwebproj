@@ -35,60 +35,29 @@ function PublicStays() {
     checkIn: '',
     checkOut: '',
     guests: '',
-    maxPrice: 100000,
-    minRating: 0,
-    propertyType: '',
-    amenities: []
+    maxPrice: 100000
   });
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showPriceFilter, setShowPriceFilter] = useState(false);
   const [isClosingFilter, setIsClosingFilter] = useState(false);
   const [sortBy, setSortBy] = useState('featured');
 
-  const handleToggleFilter = () => {
-    if (showAdvancedFilters) {
+  const handleTogglePriceFilter = () => {
+    if (showPriceFilter) {
       setIsClosingFilter(true);
       setTimeout(() => {
-        setShowAdvancedFilters(false);
+        setShowPriceFilter(false);
         setIsClosingFilter(false);
       }, 500);
     } else {
-      setShowAdvancedFilters(true);
+      setShowPriceFilter(true);
     }
   };
 
-  const toggleAmenity = (amenity) => {
+  const clearPriceFilter = () => {
     setSearchFilters(prev => ({
       ...prev,
-      amenities: prev.amenities.includes(amenity)
-        ? prev.amenities.filter(a => a !== amenity)
-        : [...prev.amenities, amenity]
+      maxPrice: 100000
     }));
-  };
-
-  const clearAllFilters = () => {
-    setSearchFilters({
-      location: locationFilter,
-      checkIn: '',
-      checkOut: '',
-      guests: '',
-      maxPrice: 100000,
-      minRating: 0,
-      propertyType: '',
-      amenities: []
-    });
-    setSortBy('featured');
-  };
-
-  const activeFiltersCount = () => {
-    let count = 0;
-    if (searchFilters.location && searchFilters.location !== locationFilter) count++;
-    if (searchFilters.checkIn || searchFilters.checkOut) count++;
-    if (searchFilters.guests) count++;
-    if (searchFilters.maxPrice < 100000) count++;
-    if (searchFilters.minRating > 0) count++;
-    if (searchFilters.propertyType) count++;
-    if (searchFilters.amenities.length > 0) count++;
-    return count;
   };
 
   // Fetch real-time listings from Firestore
@@ -167,28 +136,6 @@ function PublicStays() {
       });
     }
     
-    // Rating filter
-    if (searchFilters.minRating > 0) {
-      filtered = filtered.filter(l => (l.rating || 0) >= searchFilters.minRating);
-    }
-    
-    // Property type filter
-    if (searchFilters.propertyType) {
-      filtered = filtered.filter(l => 
-        (l.type || '').toLowerCase() === searchFilters.propertyType.toLowerCase()
-      );
-    }
-    
-    // Amenities filter
-    if (searchFilters.amenities.length > 0) {
-      filtered = filtered.filter(l =>
-        searchFilters.amenities.every(amenity =>
-          (l.features || []).some(feature =>
-            feature.toLowerCase().includes(amenity.toLowerCase())
-          )
-        )
-      );
-    }
     
     // Apply sorting
     switch (sortBy) {
@@ -223,7 +170,7 @@ function PublicStays() {
   const toggleFavorite = (id) => setFavorites(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-0">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-white to-amber-50/20 pt-0">
       {/* Hero Search Section */}
       <section className="relative text-white py-20 overflow-hidden">
         <video
@@ -249,47 +196,49 @@ function PublicStays() {
               {/* Top Section - Search Inputs */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2 p-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                  <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Location</label>
+                  <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 hover:border-teal-300 transition-all duration-300 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200">
+                    <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     <input 
                       type="text" 
-                      placeholder="Where to?"
+                      placeholder="Where?"
                       value={searchFilters.location}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, location: e.target.value }))}
-                      className="flex-1 min-w-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none text-sm"
+                      className="flex-1 min-w-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none text-sm text-center"
                     />
                   </div>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Dates</label>
-                  <DateRangePicker
-                    startDate={searchFilters.checkIn}
-                    endDate={searchFilters.checkOut}
-                    onChange={(start, end) => {
-                      setSearchFilters(prev => ({ ...prev, checkIn: start, checkOut: end }));
-                    }}
-                    minDate={new Date().toISOString().split('T')[0]}
-                    placeholder="Select dates"
-                    className="bg-gray-50"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Dates</label>
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 hover:border-teal-300 transition-all duration-300 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200">
+                    <DateRangePicker
+                      startDate={searchFilters.checkIn}
+                      endDate={searchFilters.checkOut}
+                      onChange={(start, end) => {
+                        setSearchFilters(prev => ({ ...prev, checkIn: start, checkOut: end }));
+                      }}
+                      minDate={new Date().toISOString().split('T')[0]}
+                      placeholder="Select dates"
+                      className="bg-transparent px-4 py-3"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Guests</label>
-                  <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Guests</label>
+                  <div className="flex items-center gap-2 px-3 py-3 bg-gray-50 rounded-xl border border-gray-200 hover:border-teal-300 transition-all duration-300 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200">
                     <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                     <input 
                       type="number" 
                       min="1"
-                      placeholder="Guests"
+                      placeholder="Add guests"
                       value={searchFilters.guests}
                       onChange={(e) => setSearchFilters(prev => ({ ...prev, guests: e.target.value }))}
-                      className="flex-1 min-w-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none text-sm"
+                      className="flex-1 min-w-0 bg-transparent text-gray-800 placeholder-gray-500 focus:outline-none text-sm text-center"
                     />
                     <button 
                       className="bg-teal-600 hover:bg-teal-700 text-white p-2 rounded-lg transition-all duration-300 flex items-center justify-center shadow-md hover:shadow-lg flex-shrink-0"
@@ -305,138 +254,60 @@ function PublicStays() {
               </div>
               
               {/* Middle Section - Filters, Sort, and Listings Count */}
-              <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleToggleFilter}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                      showAdvancedFilters || activeFiltersCount() > 0
-                        ? 'bg-teal-100 text-teal-600' 
-                        : 'bg-transparent text-gray-600 hover:bg-gray-100'
-                    }`}
-                    title="Advanced filters"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                    </svg>
-                    <span className="font-medium">Filters</span>
-                    {activeFiltersCount() > 0 && (
-                      <span className="bg-teal-600 text-white text-xs rounded-full px-2 py-0.5 ml-1">
-                        {activeFiltersCount()}
-                      </span>
-                    )}
-                  </button>
-                  
-                  {activeFiltersCount() > 0 && (
+              <div className={`border-t border-gray-200 px-4 py-3 flex items-center justify-between bg-white ${!showPriceFilter && !isClosingFilter ? 'rounded-b-2xl' : ''}`}>
+                <button
+                  onClick={handleTogglePriceFilter}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 delay-75 ${
+                    showPriceFilter || searchFilters.maxPrice < 100000
+                      ? 'bg-teal-100 text-teal-600 border border-teal-300' 
+                      : 'bg-transparent text-gray-600 hover:bg-gray-100 border border-transparent'
+                  }`}
+                  title="Price filter"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  <span className="font-medium">Filters</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  {searchFilters.maxPrice < 100000 && (
                     <button
-                      onClick={clearAllFilters}
-                      className="text-sm text-gray-600 hover:text-teal-600 transition-colors"
+                      onClick={clearPriceFilter}
+                      className="bg-gray-400 text-white px-3 py-2 rounded-lg hover:bg-gray-500 transition-all duration-300 delay-100 text-sm"
                     >
-                      Clear all
+                      Clear
                     </button>
                   )}
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="featured">Featured</option>
-                    <option value="price-low">Price: Low to High</option>
-                    <option value="price-high">Price: High to Low</option>
-                    <option value="rating">Highest Rated</option>
-                    <option value="newest">Newest First</option>
-                  </select>
-                  
-                  <span className="text-gray-600 text-sm whitespace-nowrap">
+                  <span className="text-gray-600 text-sm transition-opacity duration-300 delay-100 whitespace-nowrap">
                     {filteredListings.length} of {listings.length} listings
                   </span>
                 </div>
               </div>
               
-              {/* Bottom Section - Advanced Filters Panel */}
-              {(showAdvancedFilters || isClosingFilter) && (
-                <div className={`border-t border-gray-200 px-4 py-4 transition-all duration-500 ease-out overflow-hidden bg-gray-50`} 
+              {/* Bottom Section - Price Range Filter */}
+              {(showPriceFilter || isClosingFilter) && (
+                <div className={`border-t border-gray-200 px-4 py-4 transition-all duration-500 ease-out overflow-hidden bg-white rounded-b-2xl`} 
                   style={{ 
                     animation: isClosingFilter ? 'slideUp 0.5s ease-out forwards' : 'slideDown 0.5s ease-out forwards' 
                   }}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Price Range */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
-                      <div className="text-sm text-gray-600 mb-2">
-                        ₱0 - ₱{searchFilters.maxPrice.toLocaleString('en-PH')}
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="100000"
-                        step="1000"
-                        value={searchFilters.maxPrice}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, maxPrice: parseInt(e.target.value) }))}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-300"
-                        style={{
-                          background: `linear-gradient(to right, #14b8a6 0%, #14b8a6 ${(searchFilters.maxPrice / 100000) * 100}%, #e5e7eb ${(searchFilters.maxPrice / 100000) * 100}%, #e5e7eb 100%)`
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Rating Filter */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Rating</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="5"
-                          step="0.5"
-                          value={searchFilters.minRating}
-                          onChange={(e) => setSearchFilters(prev => ({ ...prev, minRating: parseFloat(e.target.value) }))}
-                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                        />
-                        <span className="text-sm font-medium text-gray-700 w-12 text-right">
-                          {searchFilters.minRating > 0 ? `${searchFilters.minRating.toFixed(1)}★` : 'Any'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Property Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Property Type</label>
-                      <select
-                        value={searchFilters.propertyType}
-                        onChange={(e) => setSearchFilters(prev => ({ ...prev, propertyType: e.target.value }))}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      >
-                        <option value="">All Types</option>
-                        <option value="Entire Place">Entire Place</option>
-                        <option value="Private Room">Private Room</option>
-                        <option value="Shared Room">Shared Room</option>
-                      </select>
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price Range</label>
+                    <div className="text-sm text-gray-600">
+                      ₱0 - ₱{searchFilters.maxPrice.toLocaleString('en-PH')}
                     </div>
                   </div>
-                  
-                  {/* Amenities */}
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
-                    <div className="flex flex-wrap gap-2">
-                      {['WiFi', 'Kitchen', 'Parking', 'Pool', 'Air Conditioning', 'TV', 'Pet Friendly', 'Gym'].map(amenity => (
-                        <button
-                          key={amenity}
-                          onClick={() => toggleAmenity(amenity)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                            searchFilters.amenities.includes(amenity)
-                              ? 'bg-teal-600 text-white'
-                              : 'bg-white text-gray-700 border border-gray-300 hover:border-teal-500'
-                          }`}
-                        >
-                          {amenity}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100000"
+                    step="1000"
+                    value={searchFilters.maxPrice}
+                    onChange={(e) => setSearchFilters(prev => ({ ...prev, maxPrice: parseInt(e.target.value) }))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-300"
+                    style={{
+                      background: `linear-gradient(to right, #14b8a6 0%, #14b8a6 ${(searchFilters.maxPrice / 100000) * 100}%, #e5e7eb ${(searchFilters.maxPrice / 100000) * 100}%, #e5e7eb 100%)`
+                    }}
+                  />
                 </div>
               )}
             </div>

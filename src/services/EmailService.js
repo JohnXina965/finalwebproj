@@ -6,6 +6,14 @@ const EMAILJS_CONFIG = {
   TEMPLATE_BOOKING_NOTIFICATIONS: 'template_8kvqbzd' // Combined template for approval/rejection/cancellation
 };
 
+// EmailJS Account 2 - For wallet transactions (cash-in, cash-out)
+const EMAILJS_CONFIG_ACCOUNT2 = {
+  SERVICE_ID: 'service_yaewyfi',
+  USER_ID: 'Vdve3tFnBgXl-MH0o',
+  TEMPLATE_CASH_IN: 'template_3wbzery',
+  TEMPLATE_CASH_OUT: 'template_fzimfn7'
+};
+
 export const initEmailJS = () => {
   if (typeof window !== 'undefined' && window.emailjs) {
     window.emailjs.init(EMAILJS_CONFIG.USER_ID);
@@ -55,8 +63,9 @@ const getExpiryTime = () => {
 };
 
 /**
- * Send booking notification email (unified function for all types)
- * Uses a single template with email_type parameter
+ * Send booking notification email (unified function for booking types only)
+ * Uses template_8kvqbzd with email_type parameter
+ * Supports: booking (approval/rejection/cancellation) ONLY
  */
 export const sendBookingNotificationEmail = async (guestEmail, guestName, details, emailType) => {
   try {
@@ -89,6 +98,7 @@ export const sendBookingNotificationEmail = async (guestEmail, guestName, detail
     // Prepare common parameters
     const templateParams = {
       to_email: guestEmail,
+      email: guestEmail, // Also send as 'email' for backward compatibility with templates that use {{email}}
       guest_name: guestName || 'Guest',
       email_type: emailType, // 'approval', 'rejection', or 'cancellation'
       
@@ -167,58 +177,10 @@ export const sendCancellationRefundEmail = async (guestEmail, guestName, cancell
   return sendBookingNotificationEmail(guestEmail, guestName, cancellationDetails, 'cancellation');
 };
 
-/**
- * Send booking created notification to host
- */
-export const sendNewBookingNotificationToHost = async (hostEmail, hostName, bookingDetails) => {
-  try {
-    if (typeof window === 'undefined' || !window.emailjs) {
-      console.warn('EmailJS not available. Skipping host notification.');
-      return;
-    }
-
-    // Initialize EmailJS if needed
-    try {
-      window.emailjs.init(EMAILJS_CONFIG.USER_ID);
-    } catch (initError) {
-      console.warn('EmailJS already initialized or init failed:', initError);
-    }
-
-    const templateParams = {
-      to_email: hostEmail,
-      host_name: hostName || 'Host',
-      email_type: 'new_booking',
-      booking_status: 'New Booking Request',
-      status_message: 'You have received a new booking request that requires your attention.',
-      listing_title: bookingDetails.listingTitle || 'Your Listing',
-      guest_name: bookingDetails.guestName || 'Guest',
-      check_in: bookingDetails.checkIn ? (bookingDetails.checkIn instanceof Date ? bookingDetails.checkIn.toLocaleDateString('en-US') : bookingDetails.checkIn) : '',
-      check_out: bookingDetails.checkOut ? (bookingDetails.checkOut instanceof Date ? bookingDetails.checkOut.toLocaleDateString('en-US') : bookingDetails.checkOut) : '',
-      guests: bookingDetails.guests || 1,
-      total_amount: bookingDetails.totalAmount ? `₱${bookingDetails.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '',
-      booking_id: bookingDetails.bookingId || 'N/A',
-      action_button_text: 'View Booking',
-      action_button_link: 'https://yourwebsite.com/host/dashboard?section=bookings'
-    };
-
-    console.log('📧 Sending new booking notification to host:', hostEmail);
-
-    const response = await window.emailjs.send(
-      EMAILJS_CONFIG.SERVICE_ID,
-      EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS,
-      templateParams
-    );
-
-    console.log('✅ New booking notification sent to host:', response);
-    return response;
-  } catch (error) {
-    console.error('❌ Error sending new booking notification to host:', error);
-    // Don't throw - this is a non-critical notification
-  }
-};
 
 /**
  * Send auto-confirmation notification to guest
+ * Uses booking approval email since auto-confirmation is a type of booking approval
  */
 export const sendAutoConfirmationEmail = async (guestEmail, guestName, bookingDetails) => {
   try {
@@ -237,151 +199,215 @@ export const sendAutoConfirmationEmail = async (guestEmail, guestName, bookingDe
 
 /**
  * Send booking reminder email (check-in reminders)
+ * NOTE: This function is kept for backward compatibility but does not send emails
+ * as template_8kvqbzd is ONLY for booking, cancellation, and refund emails
  */
 export const sendBookingReminderEmail = async (guestEmail, guestName, reminderDetails) => {
-  try {
-    if (typeof window === 'undefined' || !window.emailjs) {
-      console.warn('EmailJS not available. Skipping reminder notification.');
-      return;
-    }
-
-    // Initialize EmailJS if needed
-    try {
-      window.emailjs.init(EMAILJS_CONFIG.USER_ID);
-    } catch (initError) {
-      console.warn('EmailJS already initialized or init failed:', initError);
-    }
-
-    const templateParams = {
-      to_email: guestEmail,
-      guest_name: guestName || 'Guest',
-      email_type: 'reminder',
-      booking_status: 'Upcoming Check-in',
-      status_message: reminderDetails.reminderMessage || 'Don\'t forget about your upcoming stay!',
-      listing_title: reminderDetails.listingTitle || 'Booking',
-      check_in: reminderDetails.checkIn || 'N/A',
-      check_out: reminderDetails.checkOut || 'N/A',
-      booking_id: reminderDetails.bookingId || 'N/A',
-      reminder_type: reminderDetails.reminderType || 'check_in',
-      action_button_text: 'View Booking',
-      action_button_link: 'https://yourwebsite.com/trips'
-    };
-
-    console.log('📧 Sending booking reminder to:', guestEmail);
-
-    const response = await window.emailjs.send(
-      EMAILJS_CONFIG.SERVICE_ID,
-      EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS,
-      templateParams
-    );
-
-    console.log('✅ Booking reminder sent:', response);
-    return response;
-  } catch (error) {
-    console.error('❌ Error sending booking reminder:', error);
-    // Don't throw - this is a non-critical notification
-  }
+  // Removed - template_8kvqbzd is only for booking, cancellation, and refund
+  console.log('📧 Booking reminder skipped - template_8kvqbzd is only for booking, cancellation, and refund emails');
+  return;
 };
 
 /**
  * Send review reminder email after check-out
+ * NOTE: This function is kept for backward compatibility but does not send emails
+ * as template_8kvqbzd is ONLY for booking, cancellation, and refund emails
  */
 export const sendReviewReminderEmail = async (guestEmail, guestName, bookingDetails) => {
-  try {
-    if (typeof window === 'undefined' || !window.emailjs) {
-      console.warn('EmailJS not available. Skipping review reminder.');
-      return;
-    }
-
-    // Initialize EmailJS if needed
-    try {
-      window.emailjs.init(EMAILJS_CONFIG.USER_ID);
-    } catch (initError) {
-      console.warn('EmailJS already initialized or init failed:', initError);
-    }
-
-    const templateParams = {
-      to_email: guestEmail,
-      guest_name: guestName || 'Guest',
-      email_type: 'review_reminder',
-      booking_status: 'Stay Completed',
-      status_message: 'We hope you had a great stay! Please share your experience by leaving a review.',
-      listing_title: bookingDetails.listingTitle || 'Booking',
-      check_in: bookingDetails.checkIn || 'N/A',
-      check_out: bookingDetails.checkOut || 'N/A',
-      host_name: bookingDetails.hostName || 'Host',
-      booking_id: bookingDetails.bookingId || 'N/A',
-      action_button_text: 'Leave a Review',
-      action_button_link: 'https://yourwebsite.com/trips'
-    };
-
-    console.log('📧 Sending review reminder to:', guestEmail);
-
-    const response = await window.emailjs.send(
-      EMAILJS_CONFIG.SERVICE_ID,
-      EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS,
-      templateParams
-    );
-
-    console.log('✅ Review reminder sent:', response);
-    return response;
-  } catch (error) {
-    console.error('❌ Error sending review reminder:', error);
-    // Don't throw - this is a non-critical notification
-  }
+  // Removed - template_8kvqbzd is only for booking, cancellation, and refund
+  console.log('📧 Review reminder skipped - template_8kvqbzd is only for booking, cancellation, and refund emails');
+  return;
 };
 
 /**
  * Send booking completion notification to guest and host
+ * NOTE: This function is kept for backward compatibility but does not send emails
+ * as template_8kvqbzd is ONLY for booking, cancellation, and refund emails
  */
 export const sendBookingCompletionEmail = async (email, name, bookingDetails, userType = 'guest') => {
+  // Removed - template_8kvqbzd is only for booking, cancellation, and refund
+  console.log('📧 Booking completion notification skipped - template_8kvqbzd is only for booking, cancellation, and refund emails');
+  return;
+};
+
+/**
+ * Send cash-in confirmation email (Account 2)
+ * Uses separate template for cash-in transactions
+ */
+export const sendCashInConfirmationEmail = async (email, name, cashInDetails) => {
   try {
     if (typeof window === 'undefined' || !window.emailjs) {
-      console.warn('EmailJS not available. Skipping completion notification.');
+      console.warn('EmailJS not available. Skipping cash-in confirmation.');
       return;
     }
 
-    // Initialize EmailJS if needed
+    // Initialize EmailJS Account 2
     try {
-      window.emailjs.init(EMAILJS_CONFIG.USER_ID);
+      window.emailjs.init(EMAILJS_CONFIG_ACCOUNT2.USER_ID);
     } catch (initError) {
-      console.warn('EmailJS already initialized or init failed:', initError);
+      console.warn('EmailJS Account 2 already initialized or init failed:', initError);
     }
+
+    const amount = cashInDetails.amount || 0;
+    const newBalance = cashInDetails.newBalance || 0;
+    const dateTime = cashInDetails.dateTime 
+      ? (cashInDetails.dateTime instanceof Date 
+          ? cashInDetails.dateTime.toLocaleString('en-US', { 
+              year: 'numeric', 
+              month: 'numeric', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              second: '2-digit',
+              hour12: true 
+            })
+          : new Date(cashInDetails.dateTime).toLocaleString('en-US', { 
+              year: 'numeric', 
+              month: 'numeric', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              second: '2-digit',
+              hour12: true 
+            }))
+      : new Date().toLocaleString('en-US', { 
+          year: 'numeric', 
+          month: 'numeric', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: true 
+        });
 
     const templateParams = {
       to_email: email,
-      [userType === 'guest' ? 'guest_name' : 'host_name']: name || (userType === 'guest' ? 'Guest' : 'Host'),
-      email_type: 'completion',
-      booking_status: 'Completed',
-      status_message: userType === 'guest' 
-        ? 'Thank you for staying with us! We hope you had a wonderful experience.' 
-        : 'A guest has completed their stay. You can now leave a review.',
-      listing_title: bookingDetails.listingTitle || 'Booking',
-      [userType === 'guest' ? 'host_name' : 'guest_name']: userType === 'guest' 
-        ? (bookingDetails.hostName || 'Host') 
-        : (bookingDetails.guestName || 'Guest'),
-      check_in: bookingDetails.checkIn ? (bookingDetails.checkIn instanceof Date ? bookingDetails.checkIn.toLocaleDateString('en-US') : bookingDetails.checkIn) : '',
-      check_out: bookingDetails.checkOut ? (bookingDetails.checkOut instanceof Date ? bookingDetails.checkOut.toLocaleDateString('en-US') : bookingDetails.checkOut) : '',
-      total_amount: bookingDetails.totalAmount ? `₱${bookingDetails.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '',
-      booking_id: bookingDetails.bookingId || 'N/A',
-      action_button_text: userType === 'guest' ? 'Leave a Review' : 'Review Guest',
-      action_button_link: userType === 'guest' 
-        ? 'https://yourwebsite.com/trips' 
-        : 'https://yourwebsite.com/host/dashboard?section=bookings'
+      email: email,
+      name: name || 'User',
+      guest_name: name || 'User',
+      amount: `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      amount_added: `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      new_balance: `₱${newBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      new_wallet_balance: `₱${newBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      date_time: dateTime,
+      transaction_id: cashInDetails.transactionId || `cashin_${Date.now()}`,
+      transaction_date: dateTime
     };
 
-    console.log(`📧 Sending completion notification to ${userType}:`, email);
+    console.log('📧 Sending cash-in confirmation to:', email);
+    console.log('📧 Using Account 2 - Service ID:', EMAILJS_CONFIG_ACCOUNT2.SERVICE_ID);
+    console.log('📧 Using Template ID:', EMAILJS_CONFIG_ACCOUNT2.TEMPLATE_CASH_IN);
 
     const response = await window.emailjs.send(
-      EMAILJS_CONFIG.SERVICE_ID,
-      EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS,
+      EMAILJS_CONFIG_ACCOUNT2.SERVICE_ID,
+      EMAILJS_CONFIG_ACCOUNT2.TEMPLATE_CASH_IN,
       templateParams
     );
 
-    console.log(`✅ Completion notification sent to ${userType}:`, response);
+    console.log('✅ Cash-in confirmation sent successfully:', response);
     return response;
   } catch (error) {
-    console.error(`❌ Error sending completion notification to ${userType}:`, error);
+    console.error('❌ Error sending cash-in confirmation:', error);
     // Don't throw - this is a non-critical notification
+    return null;
   }
 };
+
+/**
+ * Send withdrawal confirmation email (Account 2)
+ * Uses separate template for withdrawal transactions
+ */
+export const sendWithdrawalConfirmationEmail = async (email, name, withdrawalDetails) => {
+  try {
+    if (typeof window === 'undefined' || !window.emailjs) {
+      console.warn('EmailJS not available. Skipping withdrawal confirmation.');
+      return;
+    }
+
+    // Initialize EmailJS Account 2
+    try {
+      window.emailjs.init(EMAILJS_CONFIG_ACCOUNT2.USER_ID);
+    } catch (initError) {
+      console.warn('EmailJS Account 2 already initialized or init failed:', initError);
+    }
+
+    const amount = withdrawalDetails.amount || 0;
+    const newBalance = withdrawalDetails.newBalance || 0;
+    const paypalEmail = withdrawalDetails.paypalEmail || 'N/A';
+    const payoutId = withdrawalDetails.payoutId || 'N/A';
+    const dateTime = withdrawalDetails.dateTime 
+      ? (withdrawalDetails.dateTime instanceof Date 
+          ? withdrawalDetails.dateTime.toLocaleString('en-US', { 
+              year: 'numeric', 
+              month: 'numeric', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              second: '2-digit',
+              hour12: true 
+            })
+          : new Date(withdrawalDetails.dateTime).toLocaleString('en-US', { 
+              year: 'numeric', 
+              month: 'numeric', 
+              day: 'numeric', 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              second: '2-digit',
+              hour12: true 
+            }))
+      : new Date().toLocaleString('en-US', { 
+          year: 'numeric', 
+          month: 'numeric', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: true 
+        });
+
+    const templateParams = {
+      to_email: email,
+      email: email,
+      name: name || 'User',
+      guest_name: name || 'User',
+      amount: `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      amount_withdrawn: `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      new_balance: `₱${newBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      new_wallet_balance: `₱${newBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+      paypal_email: paypalEmail,
+      payout_id: payoutId,
+      date_time: dateTime,
+      transaction_id: payoutId,
+      transaction_date: dateTime
+    };
+
+    console.log('📧 Sending withdrawal confirmation to:', email);
+    console.log('📧 Using Account 2 - Service ID:', EMAILJS_CONFIG_ACCOUNT2.SERVICE_ID);
+    console.log('📧 Using Template ID:', EMAILJS_CONFIG_ACCOUNT2.TEMPLATE_CASH_OUT);
+
+    const response = await window.emailjs.send(
+      EMAILJS_CONFIG_ACCOUNT2.SERVICE_ID,
+      EMAILJS_CONFIG_ACCOUNT2.TEMPLATE_CASH_OUT,
+      templateParams
+    );
+
+    console.log('✅ Withdrawal confirmation sent successfully:', response);
+    return response;
+  } catch (error) {
+    console.error('❌ Error sending withdrawal confirmation:', error);
+    // Don't throw - this is a non-critical notification
+    return null;
+  }
+};
+
+/**
+ * Send booking created notification to host
+ * NOTE: This function is kept for backward compatibility but does not send emails
+ * as template_8kvqbzd is ONLY for booking, cancellation, and refund emails
+ */
+export const sendNewBookingNotificationToHost = async (hostEmail, hostName, bookingDetails) => {
+  // Removed - template_8kvqbzd is only for booking, cancellation, and refund
+  console.log('📧 Host booking notification skipped - template_8kvqbzd is only for booking, cancellation, and refund emails');
+  return;
+};
+

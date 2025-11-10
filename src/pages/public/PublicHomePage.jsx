@@ -1,24 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { motion } from 'framer-motion';
 import manilaImg from '../../assets/manila.jpg';
 import batanesImg from '../../assets/treehouse.jpg';
 import baguioImg from '../../assets/baguio.jpg';
 import palawanImg from '../../assets/palawan.jpg';
 import cebuImg from '../../assets/cebu.jpg';
-import heroRoom1 from '../../assets/hotelroom.jpg';
-import heroRoom2 from '../../assets/mansion.jpg';
 import discover1 from '../../assets/bamboohouse2.jpg';
 import discover2 from '../../assets/beachhouse1.jpg';
 import discover3 from '../../assets/treehouse3.jpg';
 import discover4 from '../../assets/lake.jpg';
 import discover5 from '../../assets/pinetree.jpg';
 import discover6 from '../../assets/artem-pavlov-yCBa-4jdB9g-unsplash.jpg';
-import memory1 from '../../assets/treehouse.jpg';
-import memory2 from '../../assets/bamboohouse.jpg';
-import memory3 from '../../assets/makatieco.jpg';
 
-// Counter Component for Stats
+// Premium Counter Component with Glassmorphism
 function CountUpNumber({ target, suffix, duration = 2000 }) {
   const [count, setCount] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
@@ -50,7 +46,15 @@ function CountUpNumber({ target, suffix, duration = 2000 }) {
     return num.toString();
   };
 
-  return <span>{formatNumber(count)}{suffix}</span>;
+  return (
+    <motion.span
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+    >
+      {formatNumber(count)}{suffix}
+    </motion.span>
+  );
 }
 
 function PublicHomePage() {
@@ -62,6 +66,8 @@ function PublicHomePage() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [visibleSections, setVisibleSections] = useState(new Set());
   const [countedStats, setCountedStats] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const heroRef = useRef(null);
   
   // Redirect authenticated users to guest home page
   useEffect(() => {
@@ -69,6 +75,19 @@ function PublicHomePage() {
       navigate('/guest/homes', { replace: true });
     }
   }, [currentUser, navigate]);
+
+  // Mouse tracking for parallax effect
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      setMousePosition({
+        x: (e.clientX / window.innerWidth - 0.5) * 20,
+        y: (e.clientY / window.innerHeight - 0.5) * 20,
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -125,7 +144,6 @@ function PublicHomePage() {
   const handleNewsletterSubmit = (e) => {
     e.preventDefault();
     const email = e.target.email.value;
-    // Here you can add newsletter subscription logic
     console.log('Newsletter subscription:', email);
     alert('Thank you for subscribing! We\'ll keep you updated with the latest deals and travel tips.');
     e.target.reset();
@@ -134,8 +152,12 @@ function PublicHomePage() {
   // Don't render content if authenticated user (prevent flash)
   if (currentUser) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-16 h-16 border-4 border-teal-500/30 border-t-teal-500 rounded-full"
+        />
       </div>
     );
   }
@@ -152,14 +174,12 @@ function PublicHomePage() {
     if (activeSlide === index || animatingSlides.has(index)) return;
     
     if (activeSlide === null) {
-      // Opening a slide
       setAnimatingSlides(new Set([index]));
       setTimeout(() => {
         setActiveSlide(index);
         setAnimatingSlides(new Set());
       }, 50);
     } else {
-      // Switching slides
       setAnimatingSlides(new Set([activeSlide, index]));
       setTimeout(() => {
         setActiveSlide(index);
@@ -171,7 +191,6 @@ function PublicHomePage() {
   const handleCloseSlide = () => {
     if (activeSlide === null) return;
     
-    // Close the active slide
     const currentActive = activeSlide;
     setLastViewed(currentActive);
     setAnimatingSlides(new Set([currentActive]));
@@ -179,7 +198,6 @@ function PublicHomePage() {
     setTimeout(() => {
       setActiveSlide(null);
       setAnimatingSlides(new Set());
-      // Reset lastViewed after animation completes
       setTimeout(() => {
         setLastViewed(null);
       }, 1200);
@@ -189,565 +207,690 @@ function PublicHomePage() {
   const features = [
     {
       icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       ),
       title: 'Smart Search',
       description: 'Discover locations that match your needs perfectly with our advanced filtering system.',
+      gradient: 'from-emerald-500/20 to-teal-500/20',
     },
     {
       icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
         </svg>
       ),
       title: 'Verified Hosts',
       description: 'All hosts are verified and committed to providing exceptional experiences.',
+      gradient: 'from-amber-500/20 to-yellow-500/20',
     },
     {
       icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
       title: '24/7 Support',
       description: 'Get help anytime you need it with our round-the-clock customer support.',
+      gradient: 'from-blue-500/20 to-cyan-500/20',
     },
     {
       icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       ),
       title: 'Community Driven',
       description: 'Join a community of travelers and hosts passionate about sustainable travel.',
+      gradient: 'from-purple-500/20 to-pink-500/20',
     },
   ];
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-        {/* Animated gradient blob */}
+    <div className="min-h-screen bg-[#0a0a0a] text-white overflow-x-hidden" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
+      {/* Premium Hero Section with Cinematic Lighting */}
+      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        {/* Animated gradient orbs with cinematic lighting */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/30 via-purple-500/20 to-pink-500/30 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-blue-500/20 via-teal-500/30 to-cyan-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+          <motion.div
+            animate={{
+              x: [0, 100, 0],
+              y: [0, 50, 0],
+              scale: [1, 1.2, 1],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-emerald-500/40 via-teal-500/30 to-cyan-500/40 rounded-full blur-[120px]"
+          />
+          <motion.div
+            animate={{
+              x: [0, -80, 0],
+              y: [0, -60, 0],
+              scale: [1, 1.3, 1],
+            }}
+            transition={{
+              duration: 25,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute bottom-1/4 right-1/4 w-[700px] h-[700px] bg-gradient-to-r from-amber-500/30 via-yellow-500/20 to-orange-500/30 rounded-full blur-[140px]"
+          />
+          <motion.div
+            animate={{
+              x: [0, 60, 0],
+              y: [0, -40, 0],
+            }}
+            transition={{
+              duration: 30,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute top-1/2 left-1/2 w-[500px] h-[500px] bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-rose-500/20 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2"
+          />
         </div>
 
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Content */}
-            <div className="text-white space-y-6">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
-                Where Comfort<br />
-                <span className="text-teal-400">Meets Elegance</span>
-              </h1>
-              <p className="text-xl md:text-2xl text-gray-300 max-w-xl">
+        {/* Radial gradient overlay for depth */}
+        <div 
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_0%,_#0a0a0a_70%)] pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, transparent 0%, rgba(10, 10, 10, 0.8) 50%, #0a0a0a 100%)'
+          }}
+        />
+
+
+        <div className="container mx-auto px-4 relative z-10 pt-32">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            {/* Left Content with Premium Typography */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="text-white space-y-8"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.8 }}
+              >
+                <h1 
+                  className="text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] mb-6"
+                  style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700 }}
+                >
+                  Where{' '}
+                  <span className="relative inline-block">
+                    <span className="bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
+                      Comfort
+                    </span>
+                    <motion.span
+                      initial={{ width: 0 }}
+                      animate={{ width: '100%' }}
+                      transition={{ delay: 1, duration: 0.8 }}
+                      className="absolute bottom-2 left-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-400"
+                    />
+                  </span>
+                  <br />
+                  Meets{' '}
+                  <span className="bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 bg-clip-text text-transparent">
+                    Elegance
+                  </span>
+                </h1>
+              </motion.div>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.8 }}
+                className="text-xl md:text-2xl text-gray-300 max-w-xl leading-relaxed"
+              >
                 Handpicked stays designed for modern travelers seeking style, serenity, and unforgettable experiences.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Link
-                  to="/stays"
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6, duration: 0.8 }}
+                className="flex flex-col sm:flex-row gap-4 pt-4"
+              >
+                {/* Premium Glassmorphism CTA Button */}
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="w-full sm:w-auto"
                 >
-                  Explore Stays
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-                <Link
-                  to="/signup"
-                  className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 border border-white/20 hover:border-white/40"
+                  <Link
+                    to="/stays"
+                    className="group relative w-full sm:w-auto inline-flex items-center justify-center px-10 py-5 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl font-semibold text-lg text-white overflow-hidden shadow-2xl shadow-emerald-500/50 transition-all duration-300"
+                    style={{ minHeight: '60px', height: '60px' }}
+                  >
+                    <span className="relative z-10 flex items-center justify-center gap-3 whitespace-nowrap">
+                      Explore Stays
+                      <motion.svg
+                        className="w-5 h-5 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        animate={{ x: [0, 5, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </motion.svg>
+                    </span>
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      initial={false}
+                    />
+                  </Link>
+                </motion.div>
+
+                {/* Frosted Glass Secondary Button */}
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="w-full sm:w-auto"
                 >
-                  Become A Host
-                </Link>
-              </div>
-              {/* User Counter */}
-              <div className="pt-8 flex items-center gap-4">
-                <div className="flex -space-x-2">
+                  <Link
+                    to="/signup"
+                    className="w-full sm:w-auto inline-flex items-center justify-center px-10 py-5 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-2xl font-semibold text-lg text-white hover:bg-white/20 transition-all duration-300 shadow-xl whitespace-nowrap"
+                    style={{ minHeight: '60px', height: '60px' }}
+                  >
+                    Become A Host
+                  </Link>
+                </motion.div>
+              </motion.div>
+
+              {/* Premium User Counter with Glassmorphism */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8, duration: 0.8 }}
+                className="pt-8 flex items-center gap-6"
+              >
+                <div className="flex -space-x-3">
                   {[...Array(4)].map((_, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-blue-500 border-2 border-white"></div>
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, scale: 0 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 1 + i * 0.1, duration: 0.5 }}
+                      whileHover={{ scale: 1.2, zIndex: 10 }}
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 border-4 border-[#0a0a0a] shadow-lg"
+                    />
                   ))}
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">27K+</p>
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl px-6 py-4">
+                  <p className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">27K+</p>
                   <p className="text-gray-400 text-sm">Active Users</p>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
 
-            {/* Right Content - Video Collage */}
-            <div className="relative hidden lg:block">
-              <div className="relative space-y-4">
-                {/* Top Video */}
-                <div className="transform rotate-3 hover:rotate-0 transition-transform duration-500">
-                  <div className="bg-white rounded-2xl p-2 shadow-2xl overflow-hidden">
+            {/* Right Content - Premium Video Collage with Parallax */}
+            <motion.div
+              initial={{ opacity: 0, x: 50, rotateY: 15 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="relative hidden lg:block"
+              style={{
+                transform: `perspective(1000px) rotateY(${mousePosition.x * 0.5}deg) rotateX(${-mousePosition.y * 0.5}deg)`,
+              }}
+            >
+              <div className="relative space-y-6">
+                {/* Top Video with Premium Shadow */}
+                <motion.div
+                  whileHover={{ scale: 1.02, zIndex: 20 }}
+                  className="transform rotate-2 hover:rotate-0 transition-transform duration-500"
+                >
+                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl p-3 shadow-2xl overflow-hidden">
                     <video 
                       src="/videos/landingpagevideo1.mp4"
                       autoPlay
                       loop
                       muted
                       playsInline
-                      className="w-full h-64 object-cover rounded-xl"
+                      className="w-full h-72 object-cover rounded-2xl"
                     />
                   </div>
-                </div>
+                </motion.div>
                 {/* Bottom Video */}
-                <div className="transform -rotate-2 hover:rotate-0 transition-transform duration-500 ml-8">
-                  <div className="bg-white rounded-2xl p-2 shadow-2xl overflow-hidden">
+                <motion.div
+                  whileHover={{ scale: 1.02, zIndex: 20 }}
+                  className="transform -rotate-2 hover:rotate-0 transition-transform duration-500 ml-12"
+                >
+                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl p-3 shadow-2xl overflow-hidden">
                     <video 
                       src="/videos/landingpagevideo2.mp4"
                       autoPlay
                       loop
                       muted
                       playsInline
-                      className="w-full h-64 object-cover rounded-xl"
+                      className="w-full h-72 object-cover rounded-2xl"
                     />
                   </div>
-                </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
+
+        {/* Scroll Indicator */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5, duration: 1 }}
+          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
+        >
+          <motion.div
+            animate={{ y: [0, 10, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="flex flex-col items-center gap-2 text-white/60"
+          >
+            <span className="text-sm">Scroll to explore</span>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </motion.div>
+        </motion.div>
       </section>
 
-      {/* Discover Spaces Section */}
-      <section data-section id="discover-section" className={`py-20 bg-white transition-all duration-1000 ${visibleSections.has('discover-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left - Text Content */}
-            <div className="lg:col-span-4 space-y-6">
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900">
+      {/* Premium Discover Spaces Section with Glassmorphism Cards */}
+      <section data-section id="discover-section" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] via-[#111111] to-[#0a0a0a]">
+        {/* Subtle background gradient */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.1)_0%,_transparent_50%)] pointer-events-none" />
+        
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+            {/* Left - Premium Text Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.8 }}
+              className="lg:col-span-4 space-y-8"
+            >
+              <h2 
+                className="text-5xl md:text-6xl font-bold text-white leading-tight"
+                style={{ fontFamily: "'Playfair Display', serif" }}
+              >
                 Discover Spaces Made for{' '}
-                <span className="relative">
-                  Every Occasion
-                  <span className="absolute bottom-0 left-0 w-24 h-1 bg-teal-500"></span>
+                <span className="relative inline-block">
+                  <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                    Every Occasion
+                  </span>
+                  <motion.span
+                    initial={{ width: 0 }}
+                    whileInView={{ width: '100%' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8, delay: 0.3 }}
+                    className="absolute bottom-2 left-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-400"
+                  />
                 </span>
               </h2>
-              <p className="text-xl text-gray-600">
-                Smart search made simple. Discover locations that match your needs perfectly.
+              <p className="text-xl text-gray-300 leading-relaxed">
+                Smart search made simple. Discover locations that match your needs perfectly with our advanced filtering system.
               </p>
-              <div className="pt-4">
+              <motion.div
+                whileHover={{ x: 5 }}
+                className="pt-4"
+              >
                 <Link
                   to="/stays"
-                  className="inline-flex items-center gap-2 text-teal-600 hover:text-teal-700 font-semibold text-lg group"
+                  className="inline-flex items-center gap-3 text-emerald-400 hover:text-teal-400 font-semibold text-lg group"
                 >
                   Browse All Stays
-                  <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <motion.svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                  </motion.svg>
                 </Link>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
 
-            {/* Right - Photo Stream Layout */}
+            {/* Right - Premium Photo Stream with Glassmorphism Overlay */}
             <div className="lg:col-span-8 w-full">
-              <ul className="flex flex-wrap photo-stream">
+              <div className="grid grid-cols-3 gap-4">
                 {[
                   discover1, discover2, discover3, 
                   discover4, discover5, discover6
                 ].map((imgSrc, i) => (
-                  <li 
+                  <motion.div
                     key={i}
-                    className={`h-[40vh] flex-grow transition-all duration-700 ${
-                      visibleSections.has('discover-section') 
-                        ? 'opacity-100 translate-y-0 scale-100' 
-                        : 'opacity-0 translate-y-5 scale-95'
-                    }`}
-                    style={{ transitionDelay: `${i * 100}ms` }}
+                    initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.6, delay: i * 0.1 }}
+                    whileHover={{ scale: 1.05, zIndex: 10 }}
+                    className="relative group overflow-hidden rounded-2xl aspect-square"
                   >
                     <img 
                       src={imgSrc}
                       alt={`Discovery ${i + 1}`}
                       loading="lazy"
-                      className="max-h-full min-w-full object-cover align-bottom hover:opacity-90 transition-opacity duration-300"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
-                  </li>
-                ))}
-                {/* Empty li to prevent last image from stretching */}
-                <li className="h-[40vh] flex-grow-[10]"></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Turn Moments Into Memories Section */}
-      <section data-section id="memories-section" className={`py-20 bg-gradient-to-br from-gray-50 to-gray-100 transition-all duration-1000 ${visibleSections.has('memories-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left - Text Content */}
-            <div className="lg:col-span-4 space-y-6 text-gray-900 order-2 lg:order-1">
-              <h2 className="text-4xl md:text-5xl font-bold">
-                Turn Moments Into{' '}
-                <span className="relative">
-                  Memories
-                  <span className="absolute bottom-0 left-0 w-24 h-1 bg-teal-500"></span>
-                </span>
-              </h2>
-              <p className="text-xl text-gray-600">
-                Explore experiences that connect you with people, culture, and places, creating stories worth sharing.
-              </p>
-              <div className="pt-4">
-                <Link
-                  to="/experiences"
-                  className="inline-flex items-center gap-2 text-teal-600 hover:text-teal-700 font-semibold text-lg group"
-                >
-                  Explore Experiences
-                  <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-              </div>
-            </div>
-
-            {/* Right - Layered Video Cards - Desktop */}
-            <div className="lg:col-span-8 relative hidden lg:block order-1 lg:order-2">
-              <div className="relative space-y-4">
-                {[
-                  { video: '/videos/landingpagevideo6couple.mp4', rotate: 'rotate-2', translate: '', zIndex: 'z-10' },
-                  { video: '/videos/landingpagevideo7jurassicpark.mp4', rotate: '-rotate-2', translate: 'translate-x-8', zIndex: 'z-20' },
-                  { video: '/videos/landingpagevideo5baguio.mp4', rotate: 'rotate-1', translate: 'translate-x-4 translate-y-4', zIndex: 'z-30' },
-                  { video: '/videos/landingpagevideo3.mp4', rotate: '-rotate-1', translate: 'translate-x-6 translate-y-2', zIndex: 'z-40' }
-                ].map((item, index) => (
-                  <div 
-                    key={index}
-                    className={`transform transition-all duration-500 hover:scale-105 ${item.rotate} ${item.translate} ${item.zIndex}`}
-                  >
-                    <div className="bg-white rounded-2xl p-2 shadow-2xl overflow-hidden">
-                      <video 
-                        src={item.video}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="w-full h-80 object-cover rounded-xl"
-                      />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                      <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-4">
+                        <p className="text-white text-sm font-medium">Explore Now</p>
+                      </div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
-            </div>
-
-            {/* Mobile Video Grid */}
-            <div className="lg:col-span-8 grid grid-cols-2 gap-4 lg:hidden order-1">
-              {[
-                { video: '/videos/landingpagevideo6couple.mp4' },
-                { video: '/videos/landingpagevideo7jurassicpark.mp4' },
-                { video: '/videos/landingpagevideo5baguio.mp4' },
-                { video: '/videos/landingpagevideo3.mp4' }
-              ].map((item, index) => (
-                <div 
-                  key={index}
-                  className="bg-white rounded-xl overflow-hidden shadow-lg"
-                >
-                  <video 
-                    src={item.video}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-48 object-cover"
-                  />
-                </div>
-              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Trending Destinations Section */}
-      <section className="bg-gray-900 relative py-20" style={{ minHeight: '100vh' }}>
-        {/* Title Above Slider */}
-        <div className="container mx-auto px-4 mb-8 text-center">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-2" style={{ fontFamily: "'Abril Fatface', serif", letterSpacing: '0.05em' }}>
-            TRENDING IN THE PHILIPPINES 🇵🇭
-          </h2>
-          <p className="text-gray-300 text-sm md:text-base" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-            Discover the most popular destinations across the country
-          </p>
-        </div>
-
-        <div className="w-full flex items-center relative" style={{ height: 'calc(100vh - 200px)', minHeight: '80vh' }}>
-    {trendingDestinations.map((destination, index) => {
-      const isActive = activeSlide === index;
-      const isAnimating = animatingSlides.has(index);
-      const isLastViewed = lastViewed === index;
-      const isAnimOut = !isActive && activeSlide !== null && !isAnimating;
-      
-      return (
-        <div
-          key={destination.name}
-          onClick={() => !isActive && handleSlideClick(index)}
-          className={`slide relative h-full overflow-hidden transition-all duration-1000 group ${
-            isActive ? 'cursor-default flex-[0_0_100%]' : 'cursor-pointer flex-1'
-          } ${
-            isAnimating && !isActive ? 'anim-in' : ''
-          } ${
-            isAnimOut ? 'anim-out flex-0' : ''
-          } ${
-            isLastViewed ? 'last-viewed' : ''
-          }`}
-                style={{ height: 'calc(100vh - 200px)', minHeight: '80vh' }}
-              >
-          {/* Background Image */}
-          <div
-            className={`image absolute bg-cover bg-center pointer-events-none transition-all duration-1000 ${
-              isActive || isLastViewed
-                ? 'top-0 left-0 h-full w-full'
-                : isAnimating
-                ? 'top-[-20%] left-[-140%] h-[140%] w-[140%] animate-[imgAnimIn_1.2s_forwards]'
-                : 'top-0 left-0 h-full w-full'
-            } ${
-              isAnimOut ? 'animate-[imgAnimOut_1.2s_forwards]' : ''
-            }`}
-            style={{
-              backgroundImage: `url(${destination.image})`,
-              animationDelay: `${index * 0.2}s`
-            }}
-          />
-
-          {/* Overlay */}
-          <div
-            className={`overlay absolute top-0 left-0 h-full w-full bg-gradient-to-t from-black/70 via-black/0 to-transparent pointer-events-none transition-all duration-500 ${
-              isActive ? 'w-full bg-[length:100%_100%] transition-all duration-[1.25s] delay-[1.75s]' : ''
-            }`}
-          />
-
-          {/* Content */}
-          <div className={`content absolute top-0 left-0 h-full w-full ${isActive ? 'pointer-events-none' : 'pointer-events-auto'}`}>
-            {/* Title */}
-            <h1
-              className={`title absolute top-[-10px] h-[65px] w-full text-5xl text-center transition-all duration-500 z-30 tracking-wide ${
-                isActive
-                  ? 'w-full opacity-100 translate-y-[30px] transition-all duration-1000 delay-[1.25s] text-white'
-                  : 'opacity-0 text-white'
-              } ${
-                !isActive && !isAnimOut ? 'group-hover:opacity-100 group-hover:translate-y-[30px]' : ''
-              }`}
-              data-title={destination.name}
-              style={{ fontFamily: "'Abril Fatface', serif" }}
-            >
-              <span
-                className={`absolute top-0 h-0 w-full block overflow-hidden transition-all duration-[0.85s] ${
-                  isActive 
-                    ? 'h-full text-yellow-300' 
-                    : (!isAnimOut ? 'group-hover:h-full text-yellow-300' : 'h-0 text-yellow-300')
-                }`}
-              >
-                {destination.name}
-              </span>
-              <span
-                className={`absolute bottom-[15px] left-1/2 -translate-x-1/2 block h-0.5 w-[85%] bg-white shadow-[0_2px_6px_rgba(0,0,0,0.3)] origin-left transition-transform duration-[1.25s] ${
-                  isActive ? 'scale-x-100 delay-[2s]' : 'scale-x-0'
-                }`}
-              />
-            </h1>
-
-            {/* Emblem */}
-            {destination.emblem && (
-              <div
-                className={`emblem absolute left-8 h-[200px] w-[200px] bg-no-repeat bg-center bg-contain transition-all duration-1000 delay-[1.75s] ${
-                  isActive
-                    ? 'opacity-80 translate-y-[100px]'
-                    : 'opacity-0 translate-y-[120px]'
-                }`}
-                style={{
-                  backgroundImage: `url(${destination.emblem})`
-                }}
-              />
-            )}
-
-            {/* City Info */}
-            <ul
-              className={`city-info absolute bottom-8 right-8 px-8 py-8 pl-32 text-xl text-white bg-gradient-to-r from-transparent to-black/70 transition-all duration-1000 delay-[2s] font-light ${
-                isActive ? 'opacity-100' : 'opacity-0'
-              }`}
-              style={{ 
-                textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                fontFamily: "'Montserrat', sans-serif"
-              }}
-            >
-              <li
-                className={`relative mb-1.5 text-right opacity-0 -translate-x-[30px] transition-all duration-[750ms] delay-[2.5s] ${
-                  isActive ? 'opacity-100 translate-x-0' : ''
-                }`}
-              >
-                Country: Philippines
-              </li>
-              <li
-                className={`relative mb-1.5 text-right opacity-0 -translate-x-[30px] transition-all duration-[750ms] delay-[2.7s] ${
-                  isActive ? 'opacity-100 translate-x-0' : ''
-                }`}
-              >
-                Region: {destination.name === 'Manila' ? 'Metro Manila' : destination.name === 'Batanes' ? 'Cagayan Valley' : destination.name === 'Baguio' ? 'Cordillera' : destination.name === 'Palawan' ? 'MIMAROPA' : 'Central Visayas'}
-              </li>
-              <li
-                className={`relative mb-1.5 text-right opacity-0 -translate-x-[30px] transition-all duration-[750ms] delay-[2.9s] font-medium ${
-                  isActive ? 'opacity-100 translate-x-0' : ''
-                }`}
-              >
-                Stays: {destination.count}
-              </li>
-            </ul>
-
-            {/* Explore Button - Only visible when active */}
-            {isActive && (
-              <div className="absolute bottom-32 left-8 opacity-0 animate-[fadeIn_0.6s_ease-out_3s_forwards]">
-                <Link
-                  to={`/stays?location=${destination.name}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-teal-600 hover:bg-teal-700 text-white text-lg font-semibold rounded-full transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                  style={{ fontFamily: "'Montserrat', sans-serif" }}
-                >
-                  <span>Explore Stays in {destination.name}</span>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* Close Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCloseSlide();
-            }}
-            className={`btn-close absolute z-[100] top-16 right-5 h-6 w-6 ${isActive ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'}`}
-          >
-            <span
-              className={`absolute top-3 block w-full h-1 bg-white transition-all duration-500 ${
-                isActive
-                  ? 'opacity-100 rotate-45 translate-x-0 delay-[3s]'
-                  : 'opacity-0 rotate-45 translate-x-[-12px]'
-              }`}
-            />
-            <span
-              className={`absolute top-3 block w-full h-1 bg-white transition-all duration-500 ${
-                isActive
-                  ? 'opacity-100 rotate-[-45deg] translate-x-0 delay-[3.2s]'
-                  : 'opacity-0 rotate-[-45deg] translate-x-[12px]'
-              }`}
-            />
-          </button>
-
-          {/* Hover Effect */}
-          {!isActive && !isAnimOut && (
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-              <div 
-                className="absolute inset-0 scale-110 transition-transform duration-300" 
-                style={{ 
-                  backgroundImage: `url(${destination.image})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center'
-                }} 
-              />
-              <div className="absolute inset-0 bg-black/40 transition-opacity duration-300" />
-            </div>
-          )}
-        </div>
-      );
-    })}
-  </div>
-</section>
-
-      {/* Features Section */}
-      <section data-section id="features-section" className={`py-20 bg-gradient-to-br from-teal-50 to-blue-50 transition-all duration-1000 ${visibleSections.has('features-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      {/* Premium Features Section with Glassmorphism Cards */}
+      <section data-section id="features-section" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] to-[#111111]">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Why Choose EcoExpress
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-20"
+          >
+            <h2 
+              className="text-5xl md:text-6xl font-bold text-white mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Why Choose{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                EcoExpress
+              </span>
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Everything you need for an amazing travel experience
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+              Everything you need for an amazing travel experience, crafted with precision and care.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2"
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ y: -10, scale: 1.02 }}
+                className="group relative"
               >
-                <div className="w-16 h-16 bg-teal-100 rounded-xl flex items-center justify-center text-teal-600 mb-6">
-                  {feature.icon}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/0 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-300 h-full">
+                  <div className={`w-20 h-20 bg-gradient-to-br ${feature.gradient} rounded-2xl flex items-center justify-center text-emerald-400 mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-300 leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-600 leading-relaxed">
-                  {feature.description}
-                </p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Host CTA Section */}
-      <section data-section id="host-cta-section" className={`py-20 bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800 transition-all duration-1000 ${visibleSections.has('host-cta-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        <div className="container mx-auto px-4">
-          <div className="bg-gradient-to-r from-gray-700/50 to-gray-800/50 backdrop-blur-sm rounded-3xl p-8 md:p-12 lg:p-16">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              {/* Left Content */}
-              <div className="text-white space-y-6">
-                <h2 className="text-4xl md:text-5xl font-bold">
-                  Share What You Have,<br />
-                  <span className="text-teal-400">Earn While You Host</span>
-                </h2>
-                <p className="text-xl text-gray-300">
-                  Sign up as a host and make your first listing in just a few clicks.
-                </p>
-                <Link
-                  to="/signup"
-                  className="inline-block bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                >
-                  Become A Host
-                </Link>
-              </div>
+      {/* Premium Trending Destinations Section - Enhanced (Hidden on Mobile) */}
+      <section className="hidden md:block relative bg-[#0a0a0a] py-20" style={{ minHeight: '100vh' }}>
+        <div className="container mx-auto px-4 mb-12 text-center">
+          <motion.h2
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4"
+            style={{ fontFamily: "'Playfair Display', serif", letterSpacing: '0.05em' }}
+          >
+            TRENDING IN THE{' '}
+            <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+              PHILIPPINES
+            </span>{' '}
+            🇵🇭
+          </motion.h2>
+          <p className="text-gray-300 text-lg">
+            Discover the most popular destinations across the country
+          </p>
+        </div>
 
-              {/* Right Visual */}
-              <div className="relative hidden lg:block">
-                <div className="relative">
-                  {/* Mock phone illustration */}
-                  <div className="bg-gray-900 rounded-3xl p-4 shadow-2xl mx-auto max-w-xs">
-                    <div className="bg-gray-800 rounded-2xl overflow-hidden aspect-[9/16] relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-teal-400/20 to-blue-500/20"></div>
-                      <div className="absolute bottom-4 left-4 right-4 space-y-2">
-                        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-white text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-2 h-2 bg-teal-400 rounded-full"></div>
-                            <span className="font-semibold">4k followers</span>
-                          </div>
-                        </div>
-                        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-white text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-red-400">❤️</span>
-                            <span className="font-semibold">5k likes</span>
-                          </div>
-                        </div>
-                        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-white text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-blue-400">💬</span>
-                            <span className="font-semibold">11 comments</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+        <div className="w-full flex items-center relative" style={{ height: 'calc(100vh - 200px)', minHeight: '80vh' }}>
+          {trendingDestinations.map((destination, index) => {
+            const isActive = activeSlide === index;
+            const isAnimating = animatingSlides.has(index);
+            const isLastViewed = lastViewed === index;
+            const isAnimOut = !isActive && activeSlide !== null && !isAnimating;
+            
+            return (
+              <motion.div
+                key={destination.name}
+                onClick={() => !isActive && handleSlideClick(index)}
+                initial={false}
+                animate={{
+                  flex: isActive ? '0 0 100%' : '1',
+                  opacity: isAnimOut ? 0 : 1,
+                }}
+                transition={{ duration: 1, ease: "easeInOut" }}
+                className={`slide relative h-full overflow-hidden cursor-pointer group ${
+                  isActive ? 'cursor-default' : ''
+                }`}
+                style={{ height: 'calc(100vh - 200px)', minHeight: '80vh' }}
+              >
+                {/* Background Image with Premium Overlay */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-1000 group-hover:scale-110"
+                  style={{
+                    backgroundImage: `url(${destination.image})`,
+                  }}
+                />
+                
+                {/* Premium Gradient Overlay */}
+                <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30 transition-all duration-1000 ${
+                  isActive ? 'from-black/70' : ''
+                }`} />
+
+                {/* Content */}
+                <div className="absolute inset-0 flex flex-col justify-between p-12">
+                  {/* Title */}
+                  <motion.h1
+                    initial={false}
+                    animate={{
+                      opacity: isActive ? 1 : 0,
+                      y: isActive ? 0 : 20,
+                    }}
+                    transition={{ duration: 0.8, delay: isActive ? 0.5 : 0 }}
+                    className="text-6xl md:text-7xl font-bold text-white mb-8"
+                    style={{ fontFamily: "'Playfair Display', serif" }}
+                  >
+                    <span className="bg-gradient-to-r from-amber-300 to-yellow-400 bg-clip-text text-transparent">
+                      {destination.name}
+                    </span>
+                  </motion.h1>
+
+                  {/* City Info with Glassmorphism */}
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      opacity: isActive ? 1 : 0,
+                      x: isActive ? 0 : 50,
+                    }}
+                    transition={{ duration: 0.8, delay: isActive ? 0.8 : 0 }}
+                    className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-2xl p-8 max-w-md"
+                  >
+                    <ul className="space-y-3 text-white text-lg">
+                      <li className="flex justify-between">
+                        <span className="text-gray-300">Country:</span>
+                        <span className="font-semibold">Philippines</span>
+                      </li>
+                      <li className="flex justify-between">
+                        <span className="text-gray-300">Region:</span>
+                        <span className="font-semibold">
+                          {destination.name === 'Manila' ? 'Metro Manila' : 
+                           destination.name === 'Batanes' ? 'Cagayan Valley' : 
+                           destination.name === 'Baguio' ? 'Cordillera' : 
+                           destination.name === 'Palawan' ? 'MIMAROPA' : 'Central Visayas'}
+                        </span>
+                      </li>
+                      <li className="flex justify-between">
+                        <span className="text-gray-300">Stays:</span>
+                        <span className="font-semibold text-emerald-400">{destination.count}</span>
+                      </li>
+                    </ul>
+                  </motion.div>
+
+                  {/* Explore Button */}
+                  {isActive && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.2 }}
+                      className="mt-8"
+                    >
+                      <Link
+                        to={`/stays?location=${destination.name}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-lg font-semibold rounded-full hover:from-emerald-600 hover:to-teal-600 transition-all duration-300 shadow-2xl shadow-emerald-500/50"
+                      >
+                        <span>Explore Stays in {destination.name}</span>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </Link>
+                    </motion.div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
+
+                {/* Close Button */}
+                {isActive && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCloseSlide();
+                    }}
+                    className="absolute top-8 right-8 z-50 w-12 h-12 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all duration-300"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </motion.button>
+                )}
+
+                {/* Hover Effect */}
+                {!isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section id="stats-section" data-section className={`py-20 bg-white transition-all duration-1000 ${visibleSections.has('stats-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        <div className="container mx-auto px-4">
+      {/* Premium Host CTA Section with Glassmorphism */}
+      <section data-section id="host-cta-section" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] to-[#111111] overflow-hidden">
+        {/* Animated background orbs */}
+        <div className="absolute inset-0">
+          <motion.div
+            animate={{
+              x: [0, 100, 0],
+              y: [0, 50, 0],
+            }}
+            transition={{
+              duration: 15,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full blur-3xl"
+          />
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-12 md:p-16 lg:p-20 overflow-hidden relative"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-teal-500/5" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
+              <div className="text-white space-y-8">
+                <h2 
+                  className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight"
+                  style={{ fontFamily: "'Playfair Display', serif" }}
+                >
+                  Share What You Have,
+                  <br />
+                  <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                    Earn While You Host
+                  </span>
+                </h2>
+                <p className="text-xl text-gray-300 leading-relaxed">
+                  Sign up as a host and make your first listing in just a few clicks. Join thousands of hosts earning passive income.
+                </p>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Link
+                    to="/signup"
+                    className="inline-block px-10 py-5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-semibold text-lg hover:from-emerald-600 hover:to-teal-600 transition-all duration-300 shadow-2xl shadow-emerald-500/50"
+                  >
+                    Become A Host
+                  </Link>
+                </motion.div>
+              </div>
+              <div className="relative hidden lg:block">
+                <motion.div
+                  animate={{
+                    y: [0, -20, 0],
+                  }}
+                  transition={{
+                    duration: 6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl"
+                >
+                  <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-2xl p-8 space-y-4">
+                    <div className="flex items-center gap-3 text-white">
+                      <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
+                      <span className="font-semibold">4.2k followers</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white">
+                      <span className="text-red-400">❤️</span>
+                      <span className="font-semibold">12.5k likes</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-white">
+                      <span className="text-blue-400">💬</span>
+                      <span className="font-semibold">2.1k comments</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Premium Stats Section with Glassmorphism */}
+      <section id="stats-section" data-section className="relative py-32 bg-gradient-to-b from-[#111111] to-[#0a0a0a]">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(16,185,129,0.1)_0%,_transparent_70%)] pointer-events-none" />
+        <div className="container mx-auto px-4 relative z-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
               { number: 27000, label: 'Active Users', suffix: '+' },
@@ -755,73 +898,111 @@ function PublicHomePage() {
               { number: 150, label: 'Destinations', suffix: '+' },
               { number: 98, label: 'Satisfaction Rate', suffix: '%' },
             ].map((stat, index) => (
-              <div key={index} className={`text-center transition-all duration-1000 ${visibleSections.has('stats-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-5'}`} style={{ transitionDelay: `${index * 100}ms` }}>
-                <div className="text-5xl md:text-6xl font-bold text-teal-600 mb-2">
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ scale: 1.05, y: -5 }}
+                className="text-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-300"
+              >
+                <div className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent mb-4">
                   {countedStats ? (
                     <CountUpNumber target={stat.number} suffix={stat.suffix} duration={2000} />
                   ) : (
                     `0${stat.suffix}`
                   )}
                 </div>
-                <div className="text-xl text-gray-600">
+                <div className="text-lg text-gray-300">
                   {stat.label}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Popular Destinations Quick Links */}
-      <section data-section id="popular-destinations" className={`py-20 bg-gradient-to-br from-gray-50 to-white transition-all duration-1000 ${visibleSections.has('popular-destinations') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      {/* Premium Popular Destinations Quick Links */}
+      <section data-section id="popular-destinations" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] to-[#111111]">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Popular Destinations
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-20"
+          >
+            <h2 
+              className="text-5xl md:text-6xl font-bold text-white mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Popular{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                Destinations
+              </span>
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               Explore these trending destinations in the Philippines
             </p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          </motion.div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {trendingDestinations.map((destination, index) => (
-              <Link
+              <motion.div
                 key={index}
-                to={`/stays?location=${destination.name}`}
-                className={`group relative overflow-hidden rounded-2xl aspect-square transition-all duration-500 hover:scale-105 hover:shadow-2xl ${
-                  visibleSections.has('popular-destinations') 
-                    ? 'opacity-100 translate-y-0' 
-                    : 'opacity-0 translate-y-5'
-                }`}
-                style={{ transitionDelay: `${index * 100}ms` }}
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ scale: 1.05, y: -10 }}
               >
-                <img 
-                  src={destination.image}
-                  alt={destination.name}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute bottom-4 left-4 right-4 text-white">
-                  <h3 className="text-xl font-bold mb-1">{destination.name}</h3>
-                  <p className="text-sm text-gray-200">{destination.count}</p>
-                </div>
-              </Link>
+                <Link
+                  to={`/stays?location=${destination.name}`}
+                  className="group relative block overflow-hidden rounded-3xl aspect-square"
+                >
+                  <img 
+                    src={destination.image}
+                    alt={destination.name}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                  <div className="absolute bottom-6 left-6 right-6">
+                    <h3 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: "'Playfair Display', serif" }}>
+                      {destination.name}
+                    </h3>
+                    <p className="text-sm text-gray-300">{destination.count}</p>
+                  </div>
+                  <div className="absolute inset-0 border-2 border-white/0 group-hover:border-white/30 rounded-3xl transition-all duration-300" />
+                </Link>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section data-section id="testimonials-section" className={`py-20 bg-white transition-all duration-1000 ${visibleSections.has('testimonials-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      {/* Premium Testimonials Section */}
+      <section data-section id="testimonials-section" className="relative py-32 bg-gradient-to-b from-[#111111] to-[#0a0a0a]">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              What Our Guests Say
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-20"
+          >
+            <h2 
+              className="text-5xl md:text-6xl font-bold text-white mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              What Our{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                Guests Say
+              </span>
             </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               Real experiences from travelers who've stayed with EcoExpress
             </p>
-          </div>
+          </motion.div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
@@ -846,84 +1027,67 @@ function PublicHomePage() {
                 text: 'Such a unique stay! The host provided excellent recommendations for local spots. This made our trip unforgettable.',
               },
             ].map((testimonial, index) => (
-              <div
+              <motion.div
                 key={index}
-                className={`bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 ${
-                  visibleSections.has('testimonials-section') 
-                    ? 'opacity-100 translate-y-0' 
-                    : 'opacity-0 translate-y-5'
-                }`}
-                style={{ transitionDelay: `${index * 150}ms` }}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: index * 0.15 }}
+                whileHover={{ y: -10, scale: 1.02 }}
+                className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-300 relative group"
               >
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <svg key={i} className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-                <p className="text-gray-700 mb-6 leading-relaxed italic">
-                  "{testimonial.text}"
-                </p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-blue-500 flex items-center justify-center text-2xl">
-                    {testimonial.image}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/0 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative z-10">
+                  <div className="flex items-center gap-1 mb-6">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <svg key={i} className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{testimonial.name}</p>
-                    <p className="text-sm text-gray-600">{testimonial.location}</p>
+                  <p className="text-gray-300 mb-8 leading-relaxed italic text-lg">
+                    "{testimonial.text}"
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-2xl shadow-lg">
+                      {testimonial.image}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-white text-lg">{testimonial.name}</p>
+                      <p className="text-sm text-gray-400">{testimonial.location}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Newsletter Section */}
-      <section data-section id="newsletter-section" className={`py-20 bg-gradient-to-r from-teal-600 to-teal-700 transition-all duration-1000 ${visibleSections.has('newsletter-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+      {/* Premium FAQ Section */}
+      <section data-section id="faq-section" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] to-[#111111]">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              Stay Updated
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-20"
+          >
+            <h2 
+              className="text-5xl md:text-6xl font-bold text-white mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Frequently Asked{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                Questions
+              </span>
             </h2>
-            <p className="text-xl text-teal-100 mb-8">
-              Get exclusive deals, travel tips, and new destination updates delivered to your inbox
-            </p>
-            <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-              <input
-                type="email"
-                name="email"
-                placeholder="Enter your email address"
-                className="flex-1 px-6 py-4 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-teal-600 text-lg"
-                required
-              />
-              <button
-                type="submit"
-                className="bg-white text-teal-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
-              >
-                Subscribe
-              </button>
-            </form>
-            <p className="text-teal-100 text-sm mt-4">
-              We respect your privacy. Unsubscribe at any time.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section data-section id="faq-section" className={`py-20 bg-white transition-all duration-1000 ${visibleSections.has('faq-section') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Frequently Asked Questions
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               Everything you need to know about EcoExpress
             </p>
-          </div>
-          <div className="max-w-3xl mx-auto space-y-4">
+          </motion.div>
+          <div className="max-w-4xl mx-auto space-y-6">
             {[
               {
                 question: 'How do I book a stay?',
@@ -946,38 +1110,112 @@ function PublicHomePage() {
                 answer: 'Absolutely. We use industry-standard encryption to protect your personal and payment information. Your data is never shared with third parties without your consent.',
               },
             ].map((faq, index) => (
-              <div
+              <motion.div
                 key={index}
-                className={`bg-gradient-to-br from-gray-50 to-white rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300 ${
-                  visibleSections.has('faq-section') 
-                    ? 'opacity-100 translate-x-0' 
-                    : 'opacity-0 translate-x-5'
-                }`}
-                style={{ transitionDelay: `${index * 100}ms` }}
+                initial={{ opacity: 0, x: -50 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                whileHover={{ x: 10, scale: 1.01 }}
+                className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl p-8 hover:border-white/20 transition-all duration-300 group"
               >
-                <h3 className="text-xl font-bold text-gray-900 mb-3">{faq.question}</h3>
-                <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
-              </div>
+                <h3 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {faq.question}
+                </h3>
+                <p className="text-gray-300 leading-relaxed text-lg">{faq.answer}</p>
+              </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Scroll to Top Button */}
+      {/* Premium Newsletter Section with Glassmorphism */}
+      <section data-section id="newsletter-section" className="relative py-32 bg-gradient-to-b from-[#0a0a0a] to-[#111111] overflow-hidden">
+        {/* Animated background */}
+        <div className="absolute inset-0">
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              rotate: [0, 90, 0],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="absolute top-1/2 left-1/2 w-96 h-96 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"
+          />
+        </div>
+        
+        <div className="container mx-auto px-4 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="max-w-4xl mx-auto text-center"
+          >
+            <h2 
+              className="text-5xl md:text-6xl font-bold text-white mb-6"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Stay{' '}
+              <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                Updated
+              </span>
+            </h2>
+            <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
+              Get exclusive deals, travel tips, and new destination updates delivered to your inbox
+            </p>
+            <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-4 max-w-2xl mx-auto">
+              <motion.input
+                whileFocus={{ scale: 1.02 }}
+                type="email"
+                name="email"
+                placeholder="Enter your email address"
+                className="flex-1 px-6 py-5 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-lg"
+                required
+              />
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="submit"
+                className="px-10 py-5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-semibold text-lg hover:from-emerald-600 hover:to-teal-600 transition-all duration-300 shadow-2xl shadow-emerald-500/50"
+              >
+                Subscribe
+              </motion.button>
+            </form>
+            <p className="text-gray-400 text-sm mt-6">
+              We respect your privacy. Unsubscribe at any time.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Premium Scroll to Top Button */}
       {showScrollTop && (
-        <button
+        <motion.button
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0 }}
+          whileHover={{ scale: 1.1, y: -5 }}
+          whileTap={{ scale: 0.9 }}
           onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-50 bg-teal-600 hover:bg-teal-700 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 hover:shadow-teal-500/50 animate-[fadeIn_0.3s_ease-out]"
+          className="fixed bottom-8 right-8 z-50 w-14 h-14 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full shadow-2xl shadow-emerald-500/50 flex items-center justify-center transition-all duration-300"
           aria-label="Scroll to top"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
           </svg>
-        </button>
+        </motion.button>
       )}
+
+      {/* Add custom styles for fonts */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap');
+      `}</style>
     </div>
   );
 }
 
 export default PublicHomePage;
-

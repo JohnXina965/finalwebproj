@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useHost } from '../../contexts/HostContext';
 import { useWallet } from '../../contexts/WalletContext';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
-import { paypalConfig } from '../../config/paypal';
+import { paypalConfig, adminPayPalEmail } from '../../config/paypal';
 import { createPayPalSubscription, verifyPayPalSubscription, convertToPHP } from '../../services/PaypalServices';
 
 const HostSubscription = () => {
@@ -25,55 +25,55 @@ const HostSubscription = () => {
 
   const subscriptionPlans = [
     {
-      id: 'basic',
-      name: 'Basic',
-      price: 9.99,
-      period: 'one-time',
-      postingDuration: 3, // 3 months of posting duration
-      postingDurationUnit: 'months',
-      description: 'Perfect for getting started',
+      id: 'starter',
+      name: 'Starter',
+      price: 399,
+      period: 'year',
+      postingDuration: 1,
+      postingDurationUnit: 'years',
+      listingLimit: 3,
+      description: 'Perfect for new hosts',
       features: [
-        '3 Months Listing Duration',
+        '3 Listings Maximum',
+        '1 Year Listing Duration',
         'Basic Performance Analytics',
-        'Standard Customer Support',
-        'Community Access',
-        'Easy Listing Management'
+        'Standard Customer Support'
       ],
       popular: false
     },
     {
-      id: 'professional',
-      name: 'Professional',
-      price: 19.99,
-      period: 'one-time',
-      postingDuration: 12, // 12 months of posting duration
-      postingDurationUnit: 'months',
-      description: 'Best for growing hosts',
+      id: 'pro',
+      name: 'Pro',
+      price: 799,
+      period: 'year',
+      postingDuration: 1,
+      postingDurationUnit: 'years',
+      listingLimit: 10,
+      description: 'Perfect for growing hosts',
       features: [
-        '12 Months Listing Duration',
+        '10 Listings Maximum',
+        '1 Year Listing Duration',
         'Advanced Performance Analytics',
         'Priority Customer Support',
-        'Featured Listing Badge',
-        'Enhanced Booking Management',
-        'Detailed Revenue Reports'
+        'Featured Listing Badge'
       ],
       popular: true
     },
     {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 49.99,
-      period: 'one-time',
-      postingDuration: 3, // 3 years of posting duration
+      id: 'elite',
+      name: 'Elite',
+      price: 1299,
+      period: 'year',
+      postingDuration: 1,
       postingDurationUnit: 'years',
-      description: 'For power hosts & businesses',
+      listingLimit: 15,
+      description: 'Perfect for businesses',
       features: [
-        '3 Years Listing Duration',
+        '15 Listings Maximum',
+        '1 Year Listing Duration',
         'Premium Analytics Dashboard',
         '24/7 Priority Support',
-        'Advanced Marketing Tools',
-        'Revenue Optimization Insights',
-        'Priority Listing Boost'
+        'Advanced Marketing Tools'
       ],
       popular: false
     }
@@ -113,7 +113,7 @@ const HostSubscription = () => {
       return;
     }
 
-    const amountInPHP = convertToPHP(selectedPlan.price);
+    const amountInPHP = selectedPlan.price; // Already in PHP
 
     // Check balance but don't deduct yet - will be deducted when listing is published
     if (balance < amountInPHP) {
@@ -154,10 +154,6 @@ const HostSubscription = () => {
     components: "buttons",
   };
 
-  // Convert price to PHP for display
-  const getPriceInPHP = (usdPrice) => {
-    return convertToPHP(usdPrice);
-  };
 
   return (
     <PayPalScriptProvider options={paypalOptions}>
@@ -228,20 +224,15 @@ const HostSubscription = () => {
                 <div className="text-center mb-6 transition-all duration-500 delay-700">
                   <h3 className="text-2xl font-bold text-gray-900 mb-2 transition-all duration-500 delay-800">{plan.name}</h3>
                   <div className="flex items-baseline justify-center mb-2 transition-all duration-500 delay-900">
-                    <span className="text-4xl font-bold text-teal-600 transition-all duration-500 delay-1000">${plan.price}</span>
+                    <span className="text-4xl font-bold text-teal-600 transition-all duration-500 delay-1000">₱{plan.price.toLocaleString()}</span>
                     <span className="text-gray-500 ml-2 transition-all duration-500 delay-1100 text-sm">
-                      {plan.period === 'one-time' ? 'one-time' : `/${plan.period}`}
+                      / {plan.period}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500 mb-1 transition-all duration-500 delay-1200">
-                    ≈ ₱{getPriceInPHP(plan.price)} PHP
-                  </div>
                   <p className="text-gray-600 text-sm transition-all duration-500 delay-1300">{plan.description}</p>
-                  {plan.period === 'one-time' && (
-                    <p className="text-xs text-teal-600 font-medium mt-1 transition-all duration-500 delay-1400">
-                      Valid for {plan.postingDuration} {plan.postingDurationUnit}
-                    </p>
-                  )}
+                  <p className="text-xs text-teal-600 font-medium mt-1 transition-all duration-500 delay-1400">
+                    Listings: {plan.listingLimit} • Duration: {plan.postingDuration} {plan.postingDurationUnit}
+                  </p>
                 </div>
 
                 <ul className="space-y-3 mb-6 transition-all duration-500 delay-1400">
@@ -284,17 +275,14 @@ const HostSubscription = () => {
                   <div>
                     <p className="text-teal-700 font-medium transition-all duration-500 delay-1100">{selectedPlan.name} Plan</p>
                     <p className="text-teal-600 text-sm transition-all duration-500 delay-1200">
-                      {selectedPlan.period === 'one-time' 
-                        ? `One-time payment • Valid for ${selectedPlan.postingDuration} ${selectedPlan.postingDurationUnit}`
-                        : 'Billed monthly, cancel anytime'}
+                      {selectedPlan.listingLimit} Listings • {selectedPlan.postingDuration} {selectedPlan.postingDurationUnit} Duration
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-teal-700 font-bold text-lg transition-all duration-500 delay-1300">
-                      ${selectedPlan.price}
-                      {selectedPlan.period !== 'one-time' && `/${selectedPlan.period}`}
+                      ₱{selectedPlan.price.toLocaleString()}
+                      / {selectedPlan.period}
                     </p>
-                    <p className="text-teal-600 text-sm transition-all duration-500 delay-1400">≈ ₱{getPriceInPHP(selectedPlan.price)} PHP</p>
                   </div>
                 </div>
               </div>
@@ -360,7 +348,7 @@ const HostSubscription = () => {
                     </svg>
                     <p className="text-red-700">{walletError}</p>
                   </div>
-                  {balance < convertToPHP(selectedPlan.price) && (
+                  {balance < selectedPlan.price && (
                     <Link to="/wallet" className="mt-2 inline-block text-sm text-red-600 hover:text-red-800 underline">
                       Add funds to wallet →
                     </Link>
@@ -369,7 +357,7 @@ const HostSubscription = () => {
               )}
 
               {/* Wallet Payment Info */}
-              {paymentMethod === 'wallet' && balance >= convertToPHP(selectedPlan.price) && (
+              {paymentMethod === 'wallet' && balance >= selectedPlan.price && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 transition-all duration-500">
                   <div className="flex items-start">
                     <svg className="w-5 h-5 text-blue-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -393,7 +381,7 @@ const HostSubscription = () => {
                   <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 transition-all duration-500 delay-1100 hover:shadow-md">
                     <div className="text-center mb-4 transition-all duration-500 delay-1200">
                       <p className="text-lg font-semibold text-gray-900 transition-all duration-500 delay-1300">
-                        Amount: ₱{getPriceInPHP(selectedPlan.price)} PHP
+                        Amount: ₱{selectedPlan.price.toLocaleString()} PHP
                       </p>
                       <p className="text-sm text-gray-600 transition-all duration-500 delay-1400">
                         You'll be redirected to PayPal to complete your payment
@@ -411,14 +399,17 @@ const HostSubscription = () => {
                       createOrder={async (data, actions) => {
                         try {
                           console.log('Creating PayPal order...');
-                          const amountInPHP = getPriceInPHP(selectedPlan.price);
+                          const amountInPHP = selectedPlan.price; // Already in PHP
                           
                           return actions.order.create({
                             purchase_units: [{
-                              description: `${selectedPlan.name} Plan - ${selectedPlan.postingDuration} ${selectedPlan.postingDurationUnit} listing duration`,
+                              description: `${selectedPlan.name} Plan - ${selectedPlan.listingLimit} listings, ${selectedPlan.postingDuration} ${selectedPlan.postingDurationUnit} duration`,
                               amount: {
                                 value: (parseFloat(amountInPHP) / 56.50).toFixed(2), // Convert PHP back to USD for PayPal
                                 currency_code: "USD"
+                              },
+                              payee: {
+                                email_address: adminPayPalEmail // Route subscription payment to admin PayPal account
                               }
                             }]
                           });
@@ -502,15 +493,15 @@ const HostSubscription = () => {
                       <div className="flex items-center justify-center space-x-2 transition-all duration-300 delay-1000">
                         <span>
                           {paymentMethod === 'wallet' 
-                            ? `Pay with Wallet - ₱${getPriceInPHP(selectedPlan.price)} PHP ${selectedPlan.period === 'one-time' ? '(One-time)' : `/${selectedPlan.period}`}`
-                            : `Pay with PayPal - ₱${getPriceInPHP(selectedPlan.price)} PHP ${selectedPlan.period === 'one-time' ? '(One-time)' : `/${selectedPlan.period}`}`
+                            ? `Pay with Wallet - ₱${selectedPlan.price.toLocaleString()} / ${selectedPlan.period}`
+                            : `Pay with PayPal - ₱${selectedPlan.price.toLocaleString()} / ${selectedPlan.period}`
                           }
                         </span>
                       </div>
                     )}
                   </button>
                   
-                  {paymentMethod === 'wallet' && balance < convertToPHP(selectedPlan.price) && (
+                  {paymentMethod === 'wallet' && balance < selectedPlan.price && (
                     <div className="mt-4 pt-4 border-t border-gray-200 transition-all duration-500 delay-900">
                       <p className="text-sm text-gray-600 text-center mb-3 transition-all duration-500 delay-1000">
                         Insufficient wallet balance

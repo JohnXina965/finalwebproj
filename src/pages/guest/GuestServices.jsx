@@ -341,7 +341,7 @@ function GuestServices() {
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 delay-75 ${
                       showPriceFilter || searchFilters.maxPrice < 100000 
                         ? 'bg-teal-100 text-teal-600' 
-                        : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                        : 'bg-white text-gray-600 hover:bg-gray-100'
                     }`}
                     title="Price filter"
                   >

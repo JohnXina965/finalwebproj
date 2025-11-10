@@ -344,15 +344,29 @@ export const WalletProvider = ({ children }) => {
         throw new Error(`Insufficient wallet balance. Current balance: ₱${currentBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
       }
 
+      // Import PayPal Payouts service
+      const { processPayPalPayout } = await import('../services/PayPalPayoutService');
+
+      // Process PayPal payout (admin → host PayPal)
+      const payoutResult = await processPayPalPayout(
+        amount,
+        paypalEmail,
+        `withdrawal_${currentUser.uid}_${Date.now()}`
+      );
+
+      if (!payoutResult.success) {
+        throw new Error(payoutResult.error || 'Failed to process PayPal payout');
+      }
+
+      // Deduct from wallet balance only after successful PayPal payout
       const newBalance = currentBalance - amount;
 
-      // Update wallet balance using transaction to ensure atomicity
       await updateDoc(walletRef, {
         balance: newBalance,
         updatedAt: serverTimestamp()
       });
 
-      // Create transaction record
+      // Create transaction record with completed status
       const transactionRef = doc(collection(db, 'walletTransactions'));
       await setDoc(transactionRef, {
         userId: currentUser.uid,
@@ -360,9 +374,11 @@ export const WalletProvider = ({ children }) => {
         amount: amount,
         balanceBefore: currentBalance,
         balanceAfter: newBalance,
-        status: 'pending', // Will be updated when payment is processed
-        description: description,
+        status: 'completed', // PayPal payout succeeded
+        description: `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} withdrawn to PayPal (${paypalEmail})`,
         paypalEmail: paypalEmail,
+        payoutId: payoutResult.payoutId || payoutResult.batchId,
+        payoutBatchId: payoutResult.batchId,
         createdAt: serverTimestamp()
       });
 
@@ -373,16 +389,14 @@ export const WalletProvider = ({ children }) => {
       await loadTransactions();
 
       console.log(`✅ Cash-out successful: ₱${amount} to ${paypalEmail}. New balance: ₱${newBalance}`);
+      console.log(`✅ PayPal Payout ID: ${payoutResult.payoutId}`);
 
-      // Note: In a real application, you would integrate with PayPal Payouts API here
-      // For now, we'll just record the transaction as pending
-      // The admin can process these payouts manually or integrate with PayPal Payouts API
-      // To actually send money to PayPal, you need to:
-      // 1. Set up PayPal Payouts API on your server
-      // 2. Call the API from your backend (not client-side for security)
-      // 3. Update the transaction status to 'completed' when payout succeeds
-
-      return { success: true, newBalance, transactionId: transactionRef.id };
+      return { 
+        success: true, 
+        newBalance, 
+        transactionId: transactionRef.id,
+        payoutId: payoutResult.payoutId
+      };
     } catch (error) {
       console.error('❌ Error cashing out:', error);
       console.error('Error details:', {

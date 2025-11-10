@@ -8,6 +8,13 @@
   --nature-deep: #1B5E20;
 }
 
+/* Global background for listing pages */
+body {
+  background: linear-gradient(to bottom right, #fafaf9 0%, #ffffff 50%, rgba(255, 251, 235, 0.2) 100%);
+  min-height: 100vh;
+  background-attachment: fixed;
+}
+
 @keyframes gradient-shift {
   0% {
     background-position: 0% 50%;

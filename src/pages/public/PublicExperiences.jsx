@@ -304,9 +304,9 @@ function PublicExperiences() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-0">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-white to-amber-50/20 pt-0">
       {/* Hero Search Section */}
-      <section className="relative text-white py-16 overflow-hidden">
+      <section className="relative text-white py-22 overflow-hidden">
         {/* Background Video */}
         <video
           ref={videoRef}
@@ -424,8 +424,8 @@ function PublicExperiences() {
                   onClick={handleToggleFilter}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 delay-75 ${
                     showPriceFilter || searchFilters.maxPrice < 100000
-                      ? 'bg-teal-100 text-teal-600' 
-                      : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                      ? 'bg-teal-100 text-teal-600 border border-teal-300' 
+                      : 'bg-transparent text-gray-600 hover:bg-gray-100 border border-transparent'
                   }`}
                   title="Price filter"
                 >
@@ -480,7 +480,7 @@ function PublicExperiences() {
           </div>
       </section>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 bg-gradient-to-br from-stone-50 via-white to-amber-50/20">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">All Eco Experiences</h2>

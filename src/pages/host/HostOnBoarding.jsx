@@ -132,7 +132,7 @@ const HostOnBoarding = () => {
     {
       id: 'starter',
       name: 'Starter',
-      price: 299,
+      price: 399,
       currency: 'PHP',
       period: 'year',
       listings: 3,
@@ -144,7 +144,7 @@ const HostOnBoarding = () => {
     {
       id: 'pro',
       name: 'Pro',
-      price: 699,
+      price: 799,
       currency: 'PHP',
       period: 'year',
       listings: 10,
@@ -159,7 +159,7 @@ const HostOnBoarding = () => {
       price: 1299,
       currency: 'PHP',
       period: 'year',
-      listings: 1000,
+      listings: 15,
       duration: '1 year',
       bestFor: 'Businesses',
       description: 'Perfect for businesses looking to grow',
