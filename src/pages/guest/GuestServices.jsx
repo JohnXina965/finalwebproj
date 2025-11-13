@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../Firebase';
+import { motion } from 'framer-motion';
 
 function GuestServices() {
   const [allServices, setAllServices] = useState([]);
@@ -226,7 +227,7 @@ function GuestServices() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-0">
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Search Section */}
       <section className="relative text-white py-16 overflow-hidden">
         {/* Background Video */}
@@ -247,7 +248,7 @@ function GuestServices() {
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-green-700 z-0"></div>
         )}
         
-        <div className="container mx-auto px-4 relative z-10">
+        <div className="container mx-auto px-4 py-20 relative z-10">
           <div className="max-w-4xl mx-auto text-center mb-8">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 drop-shadow-lg">Member Services</h1>
             <p className="text-xl text-white max-w-2xl mx-auto drop-shadow-md">
@@ -459,7 +460,7 @@ function GuestServices() {
             {services.map((service, index) => (
             <div 
               key={service.id} 
-              className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-gray-100 group transform hover:-translate-y-2"
+              className="bg-white rounded-xl shadow-sm hover:shadow-lg border border-gray-100 transition-transform duration-300 overflow-hidden group hover:-translate-y-1"
               style={{ animation: `fadeInUp 0.5s ease-out ${index * 0.1}s both` }}
             >
               <div className="relative h-64 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500 overflow-hidden">
@@ -486,7 +487,7 @@ function GuestServices() {
                   className={`absolute top-4 right-4 p-3 rounded-full shadow-lg transition-all duration-300 z-20 ${
                     isFavorited(service.id) 
                       ? 'bg-red-500 text-white scale-110' 
-                      : 'bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white hover:scale-110'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 hover:scale-105'
                   }`}
                 >
                   <svg 
@@ -500,12 +501,12 @@ function GuestServices() {
                   </svg>
                 </button>
                 <div className="absolute bottom-4 left-4">
-                  <span className="inline-block bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-full text-xs font-bold text-teal-700 shadow-md">
+                  <span className="inline-block bg-white px-4 py-1.5 rounded-full text-xs font-bold text-teal-700 shadow">
                     {service.category}
                   </span>
                 </div>
                 <div className="absolute bottom-4 right-4">
-                  <span className="inline-block bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow-md flex items-center gap-1">
+                  <span className="inline-block bg-white px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow flex items-center gap-1">
                     ⏱️ {service.duration}
                   </span>
                 </div>

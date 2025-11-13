@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWallet } from '../contexts/WalletContext';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import GuestFeedback from '../components/GuestFeedback';
 import InlineDateRangePicker from '../components/InlineDateRangePicker';
 import PayPalButton from '../components/PayPalButton';
@@ -495,14 +496,42 @@ const ListingDetail = () => {
   };
 
   const handleApplyPromo = () => {
-    // Simple promo code logic - can be enhanced later
+    if (!promoCode.trim()) {
+      toast.error('Please enter a promo code');
+      return;
+    }
+
+    // Check listing promo codes first
+    if (listing?.promoCodes && listing.promoCodes.length > 0) {
+      const promo = listing.promoCodes.find(
+        p => p.code.toLowerCase() === promoCode.trim().toLowerCase() && 
+        p.isActive && 
+        (!p.maxUses || !p.maxUses.toString() || parseInt(p.usedCount || 0) < parseInt(p.maxUses))
+      );
+
+      if (promo) {
+        const subtotal = calculateTotalPrice();
+        const discountPercent = parseFloat(promo.discount) || 0;
+        const discount = subtotal * (discountPercent / 100);
+        setDiscountAmount(discount);
+        setAppliedPromo({ 
+          code: promo.code, 
+          discount: discount,
+          description: promo.description 
+        });
+        toast.success(`Promo code "${promo.code}" applied! ${discountPercent}% discount added.`);
+        return;
+      }
+    }
+
+    // Fallback to hardcoded promo codes (for backward compatibility)
     if (promoCode.toLowerCase() === 'welcome10') {
       const subtotal = calculateTotalPrice();
       const discount = subtotal * 0.1; // 10% discount
       setDiscountAmount(discount);
       setAppliedPromo({ code: promoCode, discount: discount });
       toast.success('Promo code applied! 10% discount added.');
-    } else if (promoCode.trim() !== '') {
+    } else {
       toast.error('Invalid promo code');
     }
   };
@@ -795,8 +824,8 @@ const ListingDetail = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Enhanced Header with Share and Save */}
-      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -842,7 +871,7 @@ const ListingDetail = () => {
                 {showShareMenu && (
                   <>
                     <div 
-                      className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" 
+                      className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" 
                       onClick={() => setShowShareMenu(false)}
                     ></div>
                     <div className="absolute right-0 top-full mt-3 bg-white rounded-2xl shadow-2xl border-2 border-gray-100 p-6 z-50 min-w-[280px] animate-in fade-in slide-in-from-top-2">
@@ -957,11 +986,16 @@ const ListingDetail = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Enhanced Photo Gallery */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Enhanced Photo Gallery with Premium Design */}
         {photos.length > 0 && (
-          <div className="mb-10">
-            <div className="grid grid-cols-4 gap-2 h-[500px] md:h-[600px] rounded-2xl overflow-hidden shadow-lg">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mb-10"
+          >
+            <div className="grid grid-cols-4 gap-3 h-[500px] md:h-[600px] rounded-3xl overflow-hidden shadow-lg border border-gray-200">
               {/* Main large photo */}
               <div 
                 className="col-span-2 row-span-2 relative cursor-pointer group overflow-hidden bg-gray-100"
@@ -979,7 +1013,7 @@ const ListingDetail = () => {
                   }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
-                  <button className="text-white font-semibold bg-white/20 backdrop-blur-sm px-6 py-3 rounded-xl hover:bg-white/30 transition-colors border border-white/30">
+                  <button className="text-gray-900 font-semibold bg-white px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors border border-gray-200">
                     Show all photos
                   </button>
                 </div>
@@ -1006,7 +1040,7 @@ const ListingDetail = () => {
                     }}
                   />
                   {index === 3 && photos.length > 5 && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold text-lg backdrop-blur-sm">
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold text-lg">
                       <div className="text-center">
                         <div className="text-3xl mb-1">+{photos.length - 5}</div>
                         <div className="text-sm">more photos</div>
@@ -1017,28 +1051,33 @@ const ListingDetail = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
-            {/* Enhanced Title and Rating */}
-            <div className="mb-8">
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+            {/* Enhanced Title and Rating with Dark Mode */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mb-8"
+            >
+              <h1 className="text-3xl md:text-4xl font-bold text-white text-gray-900 mb-4 leading-tight bg-gradient-to-r from-white via-green-50 to-emerald-50 from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 {propertyDetails?.title || 'Untitled Listing'}
               </h1>
               <div className="flex flex-wrap items-center gap-3 text-sm md:text-base mb-6">
                 <div className="flex items-center gap-1.5">
-                  <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                   </svg>
-                  <span className="font-semibold text-gray-900">{avgRating}</span>
+                  <span className="font-semibold text-white text-gray-900">{avgRating}</span>
                 </div>
-                <span className="text-gray-300">·</span>
+                <span className="text-white/50 text-gray-900/50">·</span>
                 <Link 
                   to="#reviews" 
-                  className="text-gray-700 underline hover:text-teal-600 transition-colors font-medium"
+                  className="text-emerald-600 underline hover:text-emerald-700 transition-colors font-medium"
                   onClick={(e) => {
                     e.preventDefault();
                     setActiveTab('reviews');
@@ -1049,8 +1088,8 @@ const ListingDetail = () => {
                 >
                   {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
                 </Link>
-                <span className="text-gray-300">·</span>
-                <span className="text-gray-700 flex items-center gap-1">
+                <span className="text-white/50 text-gray-900/50">·</span>
+                <span className="text-white/90 text-gray-900/90 flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1058,10 +1097,15 @@ const ListingDetail = () => {
                   {listing.location?.city || 'Location'}, {listing.location?.country || 'Philippines'}
                 </span>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Enhanced Host Info */}
-            <div className="border border-gray-200 rounded-2xl p-6 mb-8 bg-gradient-to-br from-gray-50 to-white">
+            {/* Enhanced Host Info with Glassmorphism */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="border border-gray-200 rounded-2xl p-6 mb-8 bg-white shadow-sm"
+            >
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center overflow-hidden shadow-lg ring-2 ring-teal-100">
@@ -1102,7 +1146,7 @@ const ListingDetail = () => {
                   </Link>
                 )}
               </div>
-            </div>
+            </motion.div>
 
             {/* Enhanced Tabs */}
             <div className="border-b-2 border-gray-200 mb-8">
@@ -1192,60 +1236,6 @@ const ListingDetail = () => {
                   </div>
                 )}
 
-                {/* Location Map */}
-                {(() => {
-                  if (!listing.location) return null;
-                  
-                  // Check for latitude/longitude in various possible locations
-                  const lat = listing.location.latitude || listing.location.lat || (listing.location.coordinates && listing.location.coordinates[0]);
-                  const lng = listing.location.longitude || listing.location.lng || listing.location.lon || (listing.location.coordinates && listing.location.coordinates[1]);
-                  
-                  // Validate coordinates
-                  const isValidLat = lat != null && !isNaN(parseFloat(lat)) && parseFloat(lat) >= -90 && parseFloat(lat) <= 90;
-                  const isValidLng = lng != null && !isNaN(parseFloat(lng)) && parseFloat(lng) >= -180 && parseFloat(lng) <= 180;
-                  
-                  if (isValidLat && isValidLng) {
-                    const centerLat = parseFloat(lat);
-                    const centerLng = parseFloat(lng);
-                    
-                    return (
-                      <div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-4">Where you'll be</h2>
-                        <p className="text-gray-700 mb-4 text-lg">
-                          {listing.location.address || `${listing.location.city || ''}, ${listing.location.state || ''} ${listing.location.country || 'Philippines'}`.trim()}
-                        </p>
-                        <div className="h-[450px] rounded-2xl overflow-hidden border-2 border-gray-300 shadow-lg">
-                          <MapContainer
-                            key={`overview-map-${centerLat}-${centerLng}`}
-                            center={[centerLat, centerLng]}
-                            zoom={15}
-                            style={{ height: '100%', width: '100%', zIndex: 0 }}
-                            scrollWheelZoom={true}
-                          >
-                            <TileLayer
-                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            />
-                            <Marker 
-                              position={[centerLat, centerLng]}
-                              icon={defaultIcon}
-                            >
-                              <Popup>
-                                <div className="p-2 text-center">
-                                  <p className="font-semibold text-gray-900 mb-1">{propertyDetails?.title || 'Listing Location'}</p>
-                                  <p className="text-sm text-gray-600">
-                                    {listing.location.address || `${listing.location.city || ''}, ${listing.location.country || 'Philippines'}`.trim()}
-                                  </p>
-                                </div>
-                              </Popup>
-                            </Marker>
-                          </MapContainer>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
 
                 {/* House Rules */}
                 <div>
@@ -1626,7 +1616,7 @@ const ListingDetail = () => {
 
       {/* Photo Modal */}
       {showPhotoModal && photos.length > 0 && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4" onClick={() => setShowPhotoModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPhotoModal(false)}>
           <div className="max-w-6xl w-full relative" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setShowPhotoModal(false)}
@@ -1668,7 +1658,7 @@ const ListingDetail = () => {
 
       {/* Booking Confirmation Modal */}
       {showConfirmBookingModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowConfirmBookingModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowConfirmBookingModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Confirm Your Booking</h2>
@@ -1729,6 +1719,50 @@ const ListingDetail = () => {
             {/* Promo Code Section */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-2">PROMO CODE</label>
+              
+              {/* Display Available Promo Codes */}
+              {listing?.promoCodes && listing.promoCodes.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  <p className="text-xs text-gray-600 font-semibold">Available Promo Codes:</p>
+                  <div className="space-y-2">
+                    {listing.promoCodes
+                      .filter(p => p.isActive && (!p.maxUses || !p.maxUses.toString() || parseInt(p.usedCount || 0) < parseInt(p.maxUses)))
+                      .map((promo, index) => (
+                        <div 
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
+                          onClick={() => {
+                            setPromoCode(promo.code);
+                            handleApplyPromo();
+                          }}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-orange-700">{promo.code}</span>
+                              <span className="text-xs text-orange-600 bg-orange-200 px-2 py-0.5 rounded">
+                                {promo.discount}% OFF
+                              </span>
+                            </div>
+                            {promo.description && (
+                              <p className="text-xs text-gray-600 mt-0.5">{promo.description}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPromoCode(promo.code);
+                              handleApplyPromo();
+                            }}
+                            className="text-xs text-orange-600 hover:text-orange-700 font-semibold"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1772,7 +1806,7 @@ const ListingDetail = () => {
 
       {/* Payment Method Selection Modal */}
       {showPaymentMethodModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowPaymentMethodModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPaymentMethodModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Choose Payment Method</h2>
@@ -1841,7 +1875,7 @@ const ListingDetail = () => {
 
       {/* Wallet Payment Modal */}
       {showWalletPaymentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowWalletPaymentModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowWalletPaymentModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Pay with Wallet</h2>
@@ -1903,7 +1937,7 @@ const ListingDetail = () => {
 
       {/* PayPal Payment Modal */}
       {showPayPal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowPayPal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPayPal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Pay with PayPal</h2>

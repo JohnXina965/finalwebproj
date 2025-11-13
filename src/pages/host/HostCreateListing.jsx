@@ -213,20 +213,23 @@ const HostCreateListing = () => {
     sustainableChoice: false
   });
   
-  // Step 5: Photos
+  // Step 5: Promo Codes & Discounts
+  const [promoCodes, setPromoCodes] = useState(hostData.promoCodes || []);
+  
+  // Step 6: Photos
   const [photos, setPhotos] = useState(hostData.photos || []);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   
-  // Step 6: Review & Publish
+  // Step 7: Review & Publish
   const [publishing, setPublishing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [publishedListingId, setPublishedListingId] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingListingId, setEditingListingId] = useState(null);
   
-  const totalSteps = 6;
+  const totalSteps = 7;
   const progressPercentage = Math.round((currentStep / totalSteps) * 100);
   
   // Load listing for editing or draft from URL on mount (only once)
@@ -340,10 +343,14 @@ const HostCreateListing = () => {
       )) {
         if (hostData.location) {
           if (hostData.pricing) {
-            if (hostData.photos && hostData.photos.length > 0) {
-              setCurrentStep(6); // Review step
+            if (hostData.promoCodes && hostData.promoCodes.length > 0) {
+              if (hostData.photos && hostData.photos.length > 0) {
+                setCurrentStep(7); // Review step
+              } else {
+                setCurrentStep(6); // Photos step
+              }
             } else {
-              setCurrentStep(5); // Photos step
+              setCurrentStep(5); // Promo Codes step
             }
           } else {
             setCurrentStep(4); // Pricing step
@@ -364,6 +371,7 @@ const HostCreateListing = () => {
         setMarkerPosition(hostData.location.coordinates || [14.5995, 120.9842]);
       }
       if (hostData.pricing) setPricing(hostData.pricing);
+      if (hostData.promoCodes) setPromoCodes(hostData.promoCodes);
       if (hostData.photos) setPhotos(hostData.photos);
     }
     
@@ -401,6 +409,10 @@ const HostCreateListing = () => {
         
         if (pricing && pricing.basePrice) {
           updateData.pricing = pricing;
+        }
+        
+        if (promoCodes && promoCodes.length > 0) {
+          updateData.promoCodes = promoCodes;
         }
         
         if (photos && photos.length > 0) {
@@ -509,10 +521,12 @@ const HostCreateListing = () => {
     }
     
     updateHostData({ pricing });
-    setCurrentStep(5);
+    setCurrentStep(5); // Go to Promo Codes step
   };
   
-  // Step 5: Photos
+  // Step 5: Promo Codes (handled in renderStep5)
+  
+  // Step 6: Photos
   const handleContinueFromPhotos = () => {
     if (photos.length === 0) {
       toast.error('Please upload at least one photo');
@@ -520,7 +534,7 @@ const HostCreateListing = () => {
     }
     
     updateHostData({ photos });
-    setCurrentStep(6);
+    setCurrentStep(7); // Go to Review step
   };
   
   // Step 6: Publish
@@ -577,6 +591,10 @@ const HostCreateListing = () => {
           pricing,
           photos
         };
+        
+        if (promoCodes && promoCodes.length > 0) {
+          updateData.promoCodes = promoCodes;
+        }
         
         if (propertyType === 'home' && homeDetails) {
           updateData.homeDetails = homeDetails;
@@ -655,6 +673,10 @@ const HostCreateListing = () => {
         pricing,
         photos
       };
+      
+      if (promoCodes && promoCodes.length > 0) {
+        finalData.promoCodes = promoCodes;
+      }
       
       if (propertyType === 'home' && homeDetails) {
         finalData.homeDetails = homeDetails;
@@ -1025,7 +1047,7 @@ const HostCreateListing = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-20">
       {/* Progress Bar */}
       <div className="container mx-auto px-4 mb-8">
         <div className="max-w-2xl mx-auto">
@@ -1054,6 +1076,7 @@ const HostCreateListing = () => {
         {currentStep === 4 && renderStep4()}
         {currentStep === 5 && renderStep5()}
         {currentStep === 6 && renderStep6()}
+        {currentStep === 7 && renderStep7()}
       </div>
 
       {/* Success Modal */}
@@ -2029,10 +2052,188 @@ const HostCreateListing = () => {
   }
   
   // ============================================================================
-  // RENDER STEP 5: PHOTOS
+  // RENDER STEP 5: PROMO CODES & DISCOUNTS
   // ============================================================================
   
   function renderStep5() {
+    const generatePromoCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = 'PROMO-';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+
+    const handleAddPromoCode = () => {
+      const newCode = {
+        id: Date.now().toString(),
+        code: generatePromoCode(),
+        description: '',
+        discount: '',
+        maxUses: '',
+        usedCount: 0,
+        isActive: true
+      };
+      setPromoCodes([...promoCodes, newCode]);
+    };
+
+    const handleUpdatePromoCode = (id, field, value) => {
+      setPromoCodes(promoCodes.map(promo => 
+        promo.id === id ? { ...promo, [field]: value } : promo
+      ));
+    };
+
+    const handleRemovePromoCode = (id) => {
+      setPromoCodes(promoCodes.filter(promo => promo.id !== id));
+    };
+
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl mx-auto">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Create a Promo Code</h2>
+          <p className="text-gray-600">Generate and customize special promo codes for your guests.</p>
+        </div>
+
+        <div className="space-y-6">
+          {promoCodes.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-xl">
+              <p className="text-gray-600 mb-4">No promo codes created yet</p>
+              <button
+                onClick={handleAddPromoCode}
+                className="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                Create Your First Promo Code
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {promoCodes.map((promo) => (
+                <div key={promo.id} className="border-2 border-gray-200 rounded-xl p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Promo Code</h3>
+                    <button
+                      onClick={() => handleRemovePromoCode(promo.id)}
+                      className="text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Promo Code
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promo.code}
+                        onChange={(e) => handleUpdatePromoCode(promo.id, 'code', e.target.value)}
+                        className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                        placeholder="PROMO-XXXXXX"
+                      />
+                      <button
+                        onClick={() => handleUpdatePromoCode(promo.id, 'code', generatePromoCode())}
+                        className="px-4 py-2 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors whitespace-nowrap"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={promo.description}
+                      onChange={(e) => handleUpdatePromoCode(promo.id, 'description', e.target.value)}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                      placeholder="e.g., November promo, Early bird discount"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Discount (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={promo.discount}
+                        onChange={(e) => handleUpdatePromoCode(promo.id, 'discount', e.target.value)}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                        placeholder="15"
+                        min="0"
+                        max="100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Maximum Uses
+                      </label>
+                      <input
+                        type="number"
+                        value={promo.maxUses}
+                        onChange={(e) => handleUpdatePromoCode(promo.id, 'maxUses', e.target.value)}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                        placeholder="Unlimited (leave empty)"
+                        min="1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={handleAddPromoCode}
+                className="w-full px-6 py-3 border-2 border-dashed border-gray-300 text-gray-700 rounded-lg font-semibold hover:border-orange-500 hover:text-orange-500 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Another Promo Code
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 mt-8">
+          <button
+            onClick={handleBack}
+            className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Back
+          </button>
+          <button
+            onClick={handleSaveAndExit}
+            className="px-6 py-3 border-2 border-orange-500 text-orange-500 rounded-lg font-semibold hover:bg-orange-50 transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            </svg>
+            Save & Exit
+          </button>
+          <button
+            onClick={() => setCurrentStep(6)}
+            className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // RENDER STEP 6: PHOTOS
+  // ============================================================================
+  
+  function renderStep6() {
     
     const handleDrag = (e) => {
       e.preventDefault();
@@ -2183,7 +2384,7 @@ const HostCreateListing = () => {
             Save & Exit
           </button>
           <button
-            onClick={handleContinueFromPhotos}
+            onClick={() => setCurrentStep(7)}
             disabled={photos.length === 0 || uploadingPhoto}
             className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -2195,10 +2396,10 @@ const HostCreateListing = () => {
   }
   
   // ============================================================================
-  // RENDER STEP 6: REVIEW & PUBLISH
+  // RENDER STEP 7: REVIEW & PUBLISH
   // ============================================================================
   
-  function renderStep6() {
+  function renderStep7() {
     const getPropertyDetails = () => {
       switch(propertyType) {
         case 'home': return homeDetails;

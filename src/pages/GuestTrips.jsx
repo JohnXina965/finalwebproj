@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWallet } from '../contexts/WalletContext';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 import { sendCancellationRefundEmail } from '../services/EmailService';
 import { calculateRefund } from '../services/RefundService';
 import CancellationModal from '../components/CancellationModal';
@@ -180,8 +181,8 @@ function GuestTrips() {
           {
             bookingId: tripToCancel.id,
             listingTitle: tripToCancel.listingTitle || 'Your Booking',
-            checkIn: tripToCancel.checkIn ? formatDate(tripToCancel.checkIn.toISOString().split('T')[0]) : 'N/A',
-            checkOut: tripToCancel.checkOut ? formatDate(tripToCancel.checkOut.toISOString().split('T')[0]) : 'N/A',
+            checkIn: tripToCancel.checkIn ? formatDate(tripToCancel.checkIn) : 'N/A',
+            checkOut: tripToCancel.checkOut ? formatDate(tripToCancel.checkOut) : 'N/A',
             originalAmount: refundDetails.originalAmount,
             refundAmount: refundDetails.finalRefundAmount,
             adminDeduction: refundDetails.adminDeduction,
@@ -207,8 +208,9 @@ function GuestTrips() {
       setError('Failed to cancel trip. Please try again.');
     } finally {
       setProcessing(null);
+      setTripToCancel(null);
     }
-  }, [trips, currentUser, addToWallet]);
+  }, [tripToCancel, refundDetails, currentUser, addToWallet]);
 
   const getDaysUntilTrip = (checkIn) => {
     if (!checkIn) return null;
@@ -252,11 +254,24 @@ function GuestTrips() {
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
+    
+    // Handle Firestore Timestamp
+    if (date && typeof date.toDate === 'function') {
+      date = date.toDate();
+    }
+    // Handle string dates
+    if (typeof date === 'string') {
+      date = new Date(date);
+    }
+    // Handle Date objects
+    if (date instanceof Date && !isNaN(date.getTime())) {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+    }
+    return 'N/A';
   };
 
   const getDaysDifference = (checkIn, checkOut) => {
@@ -561,7 +576,12 @@ function GuestTrips() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="bg-white rounded-xl shadow-sm p-2 mb-6 flex flex-wrap gap-2" data-aos="fade-up" data-aos-delay="100">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 mb-6 flex flex-wrap gap-2"
+        >
           {[
             { key: 'all', label: 'All Trips', count: trips.length },
             { key: 'upcoming', label: 'Upcoming', count: trips.filter(t => {
@@ -588,7 +608,7 @@ function GuestTrips() {
               {tab.label} ({tab.count})
             </button>
           ))}
-        </div>
+        </motion.div>
 
         {/* Trips List */}
         {filteredTrips.length === 0 ? (
@@ -619,11 +639,13 @@ function GuestTrips() {
               const isUpcoming = daysUntil && daysUntil > 0 && daysUntil <= 7;
               
               return (
-                <div
+                <motion.div
                   key={trip.id}
-                  className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group"
-                  data-aos="fade-up"
-                  data-aos-delay={index * 100}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  className="bg-white rounded-xl shadow-sm hover:shadow-lg border border-gray-100 transition-all duration-300 overflow-hidden group"
                 >
                   <div className="flex flex-col md:flex-row">
                     {/* Listing Image */}
@@ -644,7 +666,7 @@ function GuestTrips() {
                       )}
                       {/* Status Badge Overlay */}
                       <div className="absolute top-4 left-4">
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 backdrop-blur-sm ${getStatusBadge(trip.status)}`}>
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold border-2 ${getStatusBadge(trip.status)}`}>
                           {getStatusIcon(trip.status)} {trip.status?.toUpperCase() || 'PENDING'}
                         </span>
                       </div>
@@ -769,10 +791,7 @@ function GuestTrips() {
                         <div className="flex flex-col gap-2 md:min-w-[200px]">
                           {trip.status === 'confirmed' && trip.checkIn && trip.checkIn > new Date() && (
                             <button
-                              onClick={() => {
-                                setSelectedTrip(trip);
-                                setShowCancelModal(true);
-                              }}
+                              onClick={() => handleCancelTrip(trip.id)}
                               disabled={processing === trip.id}
                               className="px-4 py-2.5 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-105"
                             >
@@ -850,7 +869,7 @@ function GuestTrips() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -875,7 +894,7 @@ function GuestTrips() {
 
         {/* Booking Timeline Modal */}
         {showTimelineModal && selectedTripForTimeline && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">

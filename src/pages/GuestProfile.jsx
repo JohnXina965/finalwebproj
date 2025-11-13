@@ -4,6 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { db } from '../Firebase';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 
 function GuestProfile() {
   const { currentUser } = useAuth();
@@ -291,7 +292,12 @@ function GuestProfile() {
     <div className="min-h-screen bg-gray-50 pt-20 pb-12">
       <div className="container mx-auto px-4 max-w-6xl">
         {/* Profile Header */}
-        <div className="bg-white rounded-xl shadow-sm p-8 mb-6" data-aos="fade-down">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-6"
+        >
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <div className="w-32 h-32 rounded-full bg-teal-100 flex items-center justify-center overflow-hidden flex-shrink-0">
               {profile?.avatar ? (
@@ -353,7 +359,7 @@ function GuestProfile() {
               </Link>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Left Column - Personal Information & Account Activity */}

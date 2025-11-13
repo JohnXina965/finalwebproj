@@ -335,7 +335,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div 
           ref={modalRef}
           className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
@@ -360,7 +360,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
           </div>
 
           {/* Content */}
-          <div className="p-6">
+          <div className="px-6 py-5">
             {/* Current Balance */}
             <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 mb-6 text-white">
               <p className="text-sm text-green-100 mb-1">Current Balance</p>
@@ -374,7 +374,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
               <div className="mb-6">
                 <button
                   onClick={() => amountInputRef.current?.focus()}
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-4"
+                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-4"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -391,7 +391,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                       value={cashInAmount}
                       onChange={handleAmountChange}
                       placeholder="Enter amount (minimum ₱100)"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
                     />
                     <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex flex-col">
                       <button
@@ -472,7 +472,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                     value={paypalEmail || hostPaypalEmail || ''}
                     onChange={(e) => setPaypalEmail(e.target.value)}
                     placeholder="your-email@paypal.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
                   />
                   {hostPaypalEmail && (
                     <p className="text-xs text-gray-500 mt-1">
@@ -486,7 +486,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                         <Link 
                           to="/host/settings" 
                           onClick={onClose}
-                          className="text-orange-600 hover:text-orange-700 underline font-semibold"
+                          className="text-green-600 hover:text-green-700 underline font-semibold"
                         >
                           Settings
                         </Link>
@@ -515,7 +515,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                       }
                     }}
                     placeholder="Enter amount to withdraw"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none pr-20"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none pr-20"
                   />
                   <div className="absolute right-2 top-10 transform -translate-y-1/2 flex flex-col">
                     <button
@@ -577,7 +577,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                     (!paypalEmail && !hostPaypalEmail) ||
                     (paypalEmail && !paypalEmail.includes('@'))
                   }
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
+                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
                 >
                   {cashOutProcessing ? (
                     <div className="flex items-center justify-center gap-2">
@@ -672,7 +672,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
       {/* Cash-In Success Modal - Only show if wallet modal is open */}
       {isOpen && showCashInSuccess && cashInSuccessData && (
         <div 
-          className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[110] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
           data-success-modal
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -686,20 +686,20 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-orange-500 flex items-center justify-center">
-                <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-green-500 flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Cash-In Successful!</h3>
               <p className="text-gray-700 mb-4">
-                You've successfully added <span className="text-orange-500 font-bold">₱{cashInSuccessData.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span> to your wallet.
+                You've successfully added <span className="text-green-600 font-bold">₱{cashInSuccessData.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span> to your wallet.
               </p>
               <div className="bg-gray-100 rounded-lg p-4 mb-6 flex items-center justify-center gap-2">
                 <span className="text-2xl">💰</span>
                 <div>
                   <p className="text-sm text-gray-600">New Balance:</p>
-                  <p className="text-xl font-bold text-orange-500">
+                  <p className="text-xl font-bold text-green-600">
                     ₱{cashInSuccessData.newBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
@@ -709,7 +709,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                   setShowCashInSuccess(false);
                   setCashInSuccessData(null);
                 }}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
               >
                 Close
               </button>
@@ -721,7 +721,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
       {/* Withdrawal Confirmation Modal - Only show if wallet modal is open */}
       {isOpen && showWithdrawalConfirm && withdrawalConfirmData && (
         <div 
-          className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-[110] flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
           data-confirmation-modal
           onClick={(e) => {
             // Only close if clicking the backdrop, not the modal content
@@ -737,7 +737,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
           >
             <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Withdrawal</h3>
             <p className="text-gray-700 mb-4">
-              Are you sure you want to withdraw <span className="text-orange-500 font-bold">₱{withdrawalConfirmData.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>?
+              Are you sure you want to withdraw <span className="text-green-600 font-bold">₱{withdrawalConfirmData.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>?
             </p>
             <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm text-green-800">
@@ -763,7 +763,7 @@ const WalletModal = ({ isOpen, onClose, userType = 'guest' }) => {
                   handleWithdrawalProceed();
                 }}
                 disabled={cashOutProcessing}
-                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {cashOutProcessing ? (
                   <div className="flex items-center justify-center gap-2">

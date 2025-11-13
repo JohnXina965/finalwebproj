@@ -1,10 +1,36 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../Firebase';
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { getServiceFeePercentage, updateServiceFeePercentage } from '../services/ServiceFeeService';
 import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
+
+// Icon components
+const HostIcon = () => (
+  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-3-3h-4a3 3 0 00-3 3v2zM14 10h5a2 2 0 012 2v1M14 10V8a2 2 0 00-2-2H9a2 2 0 00-2 2v2m5 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m5 0H9" />
+  </svg>
+);
+
+const RevenueIcon = () => (
+  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const BookingIcon = () => (
+  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const ListingIcon = () => (
+  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+  </svg>
+);
 
 function AdminDashboard() {
   const { currentUser } = useAuth();
@@ -360,11 +386,7 @@ function AdminDashboard() {
       value: stats.totalHosts,
       change: `+${calculatePercentageChange(stats.totalHosts, stats.totalHosts)}% from last month`,
       changeColor: 'text-gray-600',
-      icon: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-3-3h-4a3 3 0 00-3 3v2zM14 10h5a2 2 0 012 2v1M14 10V8a2 2 0 00-2-2H9a2 2 0 00-2 2v2m5 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m5 0H9" />
-        </svg>
-      ),
+      icon: HostIcon,
       bgColor: 'bg-blue-600',
       borderColor: 'border-blue-600'
     },
@@ -374,11 +396,7 @@ function AdminDashboard() {
       change: `+${calculatePercentageChange(stats.totalIncome, stats.totalIncome * 0.3)}% from last month`,
       changeColor: 'text-green-600',
       subtitle: 'Service fees + Subscriptions',
-      icon: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      icon: RevenueIcon,
       bgColor: 'bg-[#4CAF50]',
       borderColor: 'border-[#4CAF50]'
     },
@@ -387,11 +405,7 @@ function AdminDashboard() {
       value: stats.totalBookings,
       change: `+${calculatePercentageChange(stats.totalBookings, stats.totalBookings * 0.98)}% from last month`,
       changeColor: 'text-[#66BB6A]',
-      icon: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
+      icon: BookingIcon,
       bgColor: 'bg-[#66BB6A]',
       borderColor: 'border-[#66BB6A]'
     },
@@ -400,11 +414,7 @@ function AdminDashboard() {
       value: stats.activeListings,
       change: `+${calculatePercentageChange(stats.activeListings, stats.activeListings)}% from last month`,
       changeColor: 'text-gray-600',
-      icon: (
-        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-      ),
+      icon: ListingIcon,
       bgColor: 'bg-purple-600',
       borderColor: 'border-purple-600'
     }
@@ -431,44 +441,58 @@ function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Main Content Area - Adjusted for Sidebar (64 = w-64, 20 = w-20) */}
+      {/* Main Content Area - Adjusted for Sidebar */}
       <div className="lg:ml-64 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">Admin Dashboard</h1>
-          <p className="text-gray-600">Welcome to your management portal</p>
-        </div>
+        {/* Header with Premium Design */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="mb-8"
+        >
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 from-teal-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent mb-1">Admin Dashboard</h1>
+          <p className="text-gray-600 text-gray-900/80">Welcome to your management portal</p>
+        </motion.div>
 
-        {/* KPI Cards */}
+        {/* KPI Cards with Glassmorphism */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statCards.map((stat, index) => (
-            <div
+            <motion.div
               key={index}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              whileHover={{ y: -4, scale: 1.02 }}
+              className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6 hover:shadow-2xl transition-all"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className={`w-12 h-12 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                  {stat.icon}
+                  <stat.icon />
                 </div>
               </div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">{stat.title}</h3>
-              <p className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</p>
+              <h3 className="text-sm font-medium text-gray-600 text-gray-900/70 mb-1">{stat.title}</h3>
+              <p className="text-2xl font-bold text-gray-900 text-gray-900 mb-1">{stat.value}</p>
               {stat.subtitle && (
-                <p className="text-xs text-gray-500 mb-1">{stat.subtitle}</p>
+                <p className="text-xs text-gray-500 text-gray-900/60 mb-1">{stat.subtitle}</p>
               )}
-              <p className={`text-xs ${stat.changeColor}`}>{stat.change}</p>
+              <p className={`text-xs ${stat.changeColor} text-gray-900/80`}>{stat.change}</p>
               <div className={`mt-3 h-1 ${stat.bgColor} rounded-full`}></div>
-            </div>
+            </motion.div>
           ))}
         </div>
 
-        {/* Service Fee Management */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        {/* Service Fee Management with Glassmorphism */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6 mb-8"
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Service Fee Management</h3>
-              <p className="text-sm text-gray-600">Configure the service fee percentage charged on bookings</p>
+              <h3 className="text-lg font-semibold text-gray-900 text-gray-900">Service Fee Management</h3>
+              <p className="text-sm text-gray-600 text-gray-900/70">Configure the service fee percentage charged on bookings</p>
             </div>
             <div className="w-12 h-12 bg-[#C8E6C9] rounded-lg flex items-center justify-center">
               <svg className="w-6 h-6 text-[#4CAF50]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -517,14 +541,19 @@ function AdminDashboard() {
               {isUpdatingFee ? 'Updating...' : 'Update Fee'}
             </button>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Charts Row */}
+        {/* Charts Row with Glassmorphism */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Revenue Trends Line Chart */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Revenue Trends (Last 30 Days)</h3>
+              <h3 className="text-lg font-semibold text-gray-900 text-gray-900">Revenue Trends (Last 30 Days)</h3>
               <svg className="w-5 h-5 text-[#658C58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
@@ -588,25 +617,30 @@ function AdminDashboard() {
               <span>{revenueTrends[0]?.date || ''}</span>
               <span>{revenueTrends[revenueTrends.length - 1]?.date || ''}</span>
             </div>
-          </div>
+          </motion.div>
 
           {/* Revenue Breakdown */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Revenue Breakdown</h3>
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <h3 className="text-lg font-semibold text-gray-900 text-gray-900">Revenue Breakdown</h3>
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Service Fees</span>
-                  <span className="text-sm font-bold text-[#4CAF50]">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Service Fees</span>
+                  <span className="text-sm font-bold text-[#4CAF50] dark:text-green-400">
                     ₱{revenueBreakdown.serviceFees.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                   <div 
                     className="bg-[#4CAF50] h-3 rounded-full transition-all duration-500"
                     style={{ 
@@ -619,12 +653,12 @@ function AdminDashboard() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">Subscriptions</span>
-                  <span className="text-sm font-bold text-blue-600">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Subscriptions</span>
+                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                     ₱{revenueBreakdown.subscriptions.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                   <div 
                     className="bg-blue-600 h-3 rounded-full transition-all duration-500"
                     style={{ 
@@ -636,15 +670,20 @@ function AdminDashboard() {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Additional Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Monthly Income Overview */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Monthly Income Overview</h3>
+              <h3 className="text-lg font-semibold text-gray-900 text-gray-900">Monthly Income Overview</h3>
               <svg className="w-5 h-5 text-[#4CAF50]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
@@ -679,13 +718,18 @@ function AdminDashboard() {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
           {/* Booking Status Distribution */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.7 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Booking Status Distribution</h3>
-              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <h3 className="text-lg font-semibold text-gray-900 text-gray-900">Booking Status Distribution</h3>
+              <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -705,10 +749,10 @@ function AdminDashboard() {
                   return (
                     <div key={status}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 capitalize">{status}</span>
-                        <span className="text-sm font-bold text-gray-900">{count} ({percentage.toFixed(1)}%)</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{status}</span>
+                        <span className="text-sm font-bold text-gray-900 text-gray-900">{count} ({percentage.toFixed(1)}%)</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                         <div 
                           className={`${statusColors} h-3 rounded-full transition-all duration-500 shadow-sm`}
                           style={{ width: `${percentage}%` }}
@@ -723,7 +767,7 @@ function AdminDashboard() {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Plan Distribution - Full Width */}
@@ -795,101 +839,116 @@ function AdminDashboard() {
         {/* Host Performance Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Top Rated Hosts */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Top Rated Hosts (4.0+)</h3>
-            <p className="text-sm text-gray-600 mb-4">Hosts with excellent performance</p>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.7 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 text-gray-900 mb-2">Top Rated Hosts (4.0+)</h3>
+            <p className="text-sm text-gray-600 text-gray-900/70 mb-4">Hosts with excellent performance</p>
             <div className="space-y-3">
               {topRatedHosts.length > 0 ? (
                 topRatedHosts.map((host, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-semibold">
+                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 dark:text-blue-400 font-semibold">
                           {host.hostName.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{host.hostName}</p>
-                        <p className="text-sm text-gray-600">{host.hostEmail}</p>
+                        <p className="font-medium text-gray-900 text-gray-900">{host.hostName}</p>
+                        <p className="text-sm text-gray-600 text-gray-900/60">{host.hostEmail}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">{host.rating.toFixed(1)}</p>
-                      <p className="text-xs text-gray-600">{host.reviewCount} reviews</p>
+                      <p className="font-semibold text-gray-900 text-gray-900">{host.rating.toFixed(1)}</p>
+                      <p className="text-xs text-gray-600 text-gray-900/60">{host.reviewCount} reviews</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8 text-gray-400 text-gray-900/40">
                   <p>No hosts found in this category.</p>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
 
           {/* Needs Improvement */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Needs Improvement (3.9 and below)</h3>
-            <p className="text-sm text-gray-600 mb-4">Hosts that may need support</p>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.75 }}
+            className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 text-gray-900 mb-2">Needs Improvement (3.9 and below)</h3>
+            <p className="text-sm text-gray-600 text-gray-900/70 mb-4">Hosts that may need support</p>
             <div className="space-y-3">
               {needsImprovementHosts.length > 0 ? (
                 needsImprovementHosts.map((host, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#C8E6C9] bg-opacity-50 rounded-full flex items-center justify-center shadow-sm">
-                        <span className="text-[#4CAF50] font-semibold">
+                      <div className="w-10 h-10 bg-[#C8E6C9] dark:bg-emerald-500/20 bg-opacity-50 rounded-full flex items-center justify-center shadow-sm">
+                        <span className="text-[#4CAF50] dark:text-emerald-400 font-semibold">
                           {host.hostName.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{host.hostName}</p>
-                        <p className="text-sm text-gray-600">{host.hostEmail}</p>
+                        <p className="font-medium text-gray-900 text-gray-900">{host.hostName}</p>
+                        <p className="text-sm text-gray-600 text-gray-900/60">{host.hostEmail}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">
+                      <p className="font-semibold text-gray-900 text-gray-900">
                         {host.rating > 0 ? host.rating.toFixed(1) : 'N/A'}
                       </p>
-                      <p className="text-xs text-gray-600">{host.reviewCount} reviews</p>
+                      <p className="text-xs text-gray-600 text-gray-900/60">{host.reviewCount} reviews</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-gray-400">
+                <div className="text-center py-8 text-gray-400 text-gray-900/40">
                   <p>No hosts found in this category.</p>
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Recent Transactions */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Recent Transactions</h3>
-          <p className="text-sm text-gray-600 mb-4">Last 6 transactions</p>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.8 }}
+          className="bg-white rounded-2xl shadow-lg border border-white/20 border-gray-200 p-6"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 text-gray-900 mb-2">Recent Transactions</h3>
+          <p className="text-sm text-gray-600 text-gray-900/70 mb-4">Last 6 transactions</p>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Customer</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Plan</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+                <tr className="border-b border-gray-200 border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Customer</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Email</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Plan</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Amount</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 text-gray-900/80">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {recentTransactions.length > 0 ? (
                   recentTransactions.map((transaction, index) => (
-                    <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4 text-sm text-gray-900">
+                    <tr key={index} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50/50 dark:hover:bg-white/5">
+                      <td className="py-3 px-4 text-sm text-gray-900 text-gray-900">
                         {transaction.guestName || transaction.customerName || 'Guest'}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">
+                      <td className="py-3 px-4 text-sm text-gray-600 text-gray-900/70">
                         {transaction.guestEmail || transaction.customerEmail || 'N/A'}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">
+                      <td className="py-3 px-4 text-sm text-gray-600 text-gray-900/70">
                         {transaction.subscriptionPlan || transaction.plan || 'Standard'}
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-900">
@@ -915,9 +974,9 @@ function AdminDashboard() {
               </tbody>
             </table>
           </div>
+        </motion.div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

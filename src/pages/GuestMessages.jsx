@@ -38,6 +38,7 @@ function GuestMessages() {
   const [imagePreview, setImagePreview] = useState(null);
   const [listingData, setListingData] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hostTiers, setHostTiers] = useState({}); // Store host tier info by hostId
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -205,15 +206,21 @@ function GuestMessages() {
     const hostId = searchParams.get('host');
     const listingId = searchParams.get('listing');
     
-    if (hostId && conversations.length > 0) {
-      const conv = conversations.find(c => c.hostId === hostId);
-      if (conv) {
-        setSelectedConversation(conv);
+    if (hostId && !loading) {
+      // Wait for conversations to load, then auto-select
+      if (conversations.length > 0) {
+        const conv = conversations.find(c => c.hostId === hostId);
+        if (conv) {
+          setSelectedConversation(conv);
+        } else if (listingId) {
+          createConversationFromListing(hostId, listingId);
+        }
       } else if (listingId) {
+        // If no conversations yet but we have listingId, create conversation immediately
         createConversationFromListing(hostId, listingId);
       }
     }
-  }, [searchParams, conversations]);
+  }, [searchParams, conversations, loading]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -248,6 +255,60 @@ function GuestMessages() {
     }
   };
 
+  // Get host tier based on points
+  const getCurrentTier = (points) => {
+    if (points >= 50000) return { name: 'Radiant', icon: '💎', color: 'text-purple-600' };
+    if (points >= 30000) return { name: 'Immortal', icon: '👑', color: 'text-red-600' };
+    if (points >= 20000) return { name: 'Diamond', icon: '💠', color: 'text-cyan-600' };
+    if (points >= 10000) return { name: 'Platinum', icon: '🔷', color: 'text-gray-600' };
+    if (points >= 5000) return { name: 'Gold', icon: '🥇', color: 'text-yellow-600' };
+    if (points >= 2000) return { name: 'Silver', icon: '🥈', color: 'text-gray-500' };
+    if (points >= 500) return { name: 'Bronze', icon: '🥉', color: 'text-orange-600' };
+    return { name: 'Iron', icon: '⚙️', color: 'text-gray-600' };
+  };
+
+  // Load host tier info for a specific host
+  const loadHostTier = async (hostId) => {
+    if (!hostId || hostTiers[hostId]) return; // Already loaded
+    
+    try {
+      const hostPointsRef = doc(db, 'hostPoints', hostId);
+      const hostPointsSnap = await getDoc(hostPointsRef);
+      let totalPoints = 0;
+
+      if (hostPointsSnap.exists()) {
+        totalPoints = hostPointsSnap.data().totalPoints || 0;
+      } else {
+        // Calculate points from bookings and listings if hostPoints document doesn't exist
+        try {
+          const bookingsQuery = query(
+            collection(db, 'bookings'),
+            where('hostId', '==', hostId),
+            where('status', '==', 'completed')
+          );
+          const bookingsSnapshot = await getDocs(bookingsQuery);
+          const completedBookings = bookingsSnapshot.size;
+          
+          const listingsQuery = query(
+            collection(db, 'listings'),
+            where('hostId', '==', hostId)
+          );
+          const listingsSnapshot = await getDocs(listingsQuery);
+          const activeListings = listingsSnapshot.size;
+
+          totalPoints = completedBookings * 10 + activeListings * 50;
+        } catch (err) {
+          console.error('Error calculating points:', err);
+        }
+      }
+
+      const tier = getCurrentTier(totalPoints);
+      setHostTiers(prev => ({ ...prev, [hostId]: tier }));
+    } catch (error) {
+      console.error('Error loading host tier:', error);
+    }
+  };
+
   const loadConversations = async () => {
     if (!currentUser) return;
     
@@ -259,18 +320,58 @@ function GuestMessages() {
         where('guestId', '==', currentUser.uid)
       );
       
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const conversationsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          lastMessageTime: doc.data().lastMessageTime?.toDate()
-        })).sort((a, b) => {
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        const conversationsList = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const data = doc.data();
+            const conv = {
+              id: doc.id,
+              ...data,
+              lastMessageTime: data.lastMessageTime?.toDate()
+            };
+            
+            // Calculate unread count if not present
+            if (conv.unreadCount === undefined || conv.unreadCount === null) {
+              try {
+                const unreadQuery = query(
+                  collection(db, 'messages'),
+                  where('guestId', '==', currentUser.uid),
+                  where('hostId', '==', conv.hostId),
+                  where('read', '==', false)
+                );
+                const unreadSnapshot = await getDocs(unreadQuery);
+                conv.unreadCount = unreadSnapshot.size;
+              } catch (error) {
+                console.error('Error calculating unread count:', error);
+                conv.unreadCount = 0;
+              }
+            }
+            
+            return conv;
+          })
+        );
+        
+        // Sort by last message time, with unread messages first
+        conversationsList.sort((a, b) => {
+          // Unread messages first
+          if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+          if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+          
+          // Then by last message time
           if (!a.lastMessageTime) return 1;
           if (!b.lastMessageTime) return -1;
           return b.lastMessageTime - a.lastMessageTime;
         });
         
         setConversations(conversationsList);
+        
+        // Load host tiers for all conversations
+        conversationsList.forEach(conv => {
+          if (conv.hostId) {
+            loadHostTier(conv.hostId);
+          }
+        });
+        
         setLoading(false);
       });
 
@@ -676,9 +777,13 @@ function GuestMessages() {
                         setSidebarOpen(false);
                       }
                     }}
-                    className={`w-full p-3 text-left hover:bg-gray-50 transition-all duration-150 border-b border-gray-100 last:border-0 ${
+                    className={`w-full p-3 text-left hover:bg-gray-50 transition-all duration-150 border-b border-gray-100 last:border-0 relative ${
                       selectedConversation?.id === conv.id 
                         ? 'bg-gray-50' 
+                        : ''
+                    } ${
+                      conv.unreadCount > 0 
+                        ? 'bg-blue-50 border-l-4 border-l-blue-500' 
                         : ''
                     }`}
                   >
@@ -693,14 +798,27 @@ function GuestMessages() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate text-sm">{conv.hostName}</h4>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h4 className="font-semibold text-gray-900 truncate text-sm">{conv.hostName}</h4>
+                          {hostTiers[conv.hostId] && (
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 ${hostTiers[conv.hostId].color}`} title={`${hostTiers[conv.hostId].name} Rank`}>
+                              <span className="text-[10px]">{hostTiers[conv.hostId].icon}</span>
+                              <span className="text-[10px]">{hostTiers[conv.hostId].name}</span>
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage || 'No messages'}</p>
                       </div>
-                      {conv.unreadCount > 0 && (
-                        <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-medium min-w-[20px] text-center">
-                          {conv.unreadCount}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {conv.unreadCount > 0 && (
+                          <>
+                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[22px] text-center flex items-center justify-center shadow-md">
+                              {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                            </span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </button>
                 ))
@@ -740,7 +858,15 @@ function GuestMessages() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-base truncate">{selectedConversation.hostName}</h3>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-semibold text-gray-900 text-base truncate">{selectedConversation.hostName}</h3>
+                      {hostTiers[selectedConversation.hostId] && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 ${hostTiers[selectedConversation.hostId].color}`} title={`${hostTiers[selectedConversation.hostId].name} Rank`}>
+                          <span>{hostTiers[selectedConversation.hostId].icon}</span>
+                          <span>{hostTiers[selectedConversation.hostId].name}</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">Active {formatTime(selectedConversation.lastMessageTime || new Date())}</p>
                   </div>
                 </div>

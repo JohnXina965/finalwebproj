@@ -14,6 +14,14 @@ const EMAILJS_CONFIG_ACCOUNT2 = {
   TEMPLATE_CASH_OUT: 'template_fzimfn7'
 };
 
+// EmailJS Account 3 - For booking approval/rejection emails
+const EMAILJS_CONFIG_ACCOUNT3 = {
+  SERVICE_ID: 'service_mwd78t3',
+  USER_ID: 'ta272NDNmuGloHUZu', // Public Key for Account 3
+  TEMPLATE_APPROVED: 'template_j8neka1',
+  TEMPLATE_REJECTED: 'template_th1vx1c'
+};
+
 export const initEmailJS = () => {
   if (typeof window !== 'undefined' && window.emailjs) {
     window.emailjs.init(EMAILJS_CONFIG.USER_ID);
@@ -158,23 +166,226 @@ export const sendBookingNotificationEmail = async (guestEmail, guestName, detail
 
 /**
  * Send booking approval email to guest
+ * Uses Account 3 - service_mwd78t3, template_th1vx1c
  */
 export const sendBookingApprovalEmail = async (guestEmail, guestName, bookingDetails) => {
-  return sendBookingNotificationEmail(guestEmail, guestName, bookingDetails, 'approval');
+  try {
+    if (typeof window === 'undefined' || !window.emailjs) {
+      console.warn('EmailJS not available. Skipping approval email.');
+      return;
+    }
+
+    // Initialize EmailJS Account 3
+    try {
+      window.emailjs.init(EMAILJS_CONFIG_ACCOUNT3.USER_ID);
+    } catch (initError) {
+      console.warn('EmailJS Account 3 already initialized or init failed:', initError);
+    }
+
+    const templateParams = {
+      to_email: guestEmail,
+      email: guestEmail,
+      guest_name: guestName || 'Guest',
+      listing_title: bookingDetails.listingTitle || 'Your Booking',
+      booking_id: bookingDetails.bookingId || 'N/A',
+      check_in: bookingDetails.checkIn || 'N/A',
+      check_out: bookingDetails.checkOut || 'N/A',
+      total_amount: bookingDetails.totalAmount ? `₱${bookingDetails.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      host_name: bookingDetails.hostName || 'Host'
+    };
+
+    console.log('📧 Sending booking approval email to:', guestEmail);
+    console.log('📧 Using Account 3 - Service ID:', EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID);
+    console.log('📧 Using Template ID:', EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_APPROVED);
+
+    try {
+      const response = await window.emailjs.send(
+        EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID,
+        EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_APPROVED,
+        templateParams
+      );
+
+      console.log('✅ Booking approval email sent successfully via Account 3:', response);
+      return response;
+    } catch (account3Error) {
+      // Log the full error for debugging
+      console.error('❌ Account 3 error details:', {
+        status: account3Error.status,
+        text: account3Error.text,
+        message: account3Error.message,
+        serviceId: EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID,
+        templateId: EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_APPROVED,
+        userId: EMAILJS_CONFIG_ACCOUNT3.USER_ID
+      });
+
+      // Only fallback if service ID is not found - don't fallback for other errors
+      const errorText = account3Error.text || account3Error.message || '';
+      const isServiceNotFound = account3Error.status === 400 && 
+        (errorText.toLowerCase().includes('service id not found') || 
+         errorText.toLowerCase().includes('service id') ||
+         errorText.toLowerCase().includes('service not found'));
+      
+      if (isServiceNotFound) {
+        console.warn('⚠️ Account 3 service not found. Please verify:');
+        console.warn('   - Service ID:', EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID);
+        console.warn('   - USER_ID:', EMAILJS_CONFIG_ACCOUNT3.USER_ID);
+        console.warn('   - Make sure service_mwd78t3 exists in the account with this USER_ID');
+        console.warn('⚠️ NOT using fallback - approval emails require Account 3 templates');
+        // Don't use fallback - Account 3 is required for proper approval emails
+        throw new Error(`Account 3 service not found. Please configure service_mwd78t3 in EmailJS account with USER_ID: ${EMAILJS_CONFIG_ACCOUNT3.USER_ID}`);
+      }
+      
+      // For other errors, throw them
+      throw account3Error;
+    }
+  } catch (error) {
+    console.error('❌ Error sending booking approval email:', error);
+    console.error('Error details:', {
+      status: error.status,
+      text: error.text,
+      message: error.message
+    });
+    // Don't throw - this is a non-critical notification
+    return null;
+  }
 };
 
 /**
  * Send booking rejection email to guest
+ * Uses Account 3 - service_mwd78t3, template_fvwyzwg
  */
 export const sendBookingRejectionEmail = async (guestEmail, guestName, bookingDetails) => {
-  return sendBookingNotificationEmail(guestEmail, guestName, bookingDetails, 'rejection');
+  try {
+    if (typeof window === 'undefined' || !window.emailjs) {
+      console.warn('EmailJS not available. Skipping rejection email.');
+      return;
+    }
+
+    // Initialize EmailJS Account 3
+    try {
+      window.emailjs.init(EMAILJS_CONFIG_ACCOUNT3.USER_ID);
+    } catch (initError) {
+      console.warn('EmailJS Account 3 already initialized or init failed:', initError);
+    }
+
+    const templateParams = {
+      to_email: guestEmail,
+      email: guestEmail,
+      guest_name: guestName || 'Guest',
+      listing_title: bookingDetails.listingTitle || 'Your Booking',
+      booking_id: bookingDetails.bookingId || 'N/A',
+      check_in: bookingDetails.checkIn || 'N/A',
+      check_out: bookingDetails.checkOut || 'N/A',
+      total_amount: bookingDetails.totalAmount ? `₱${bookingDetails.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      host_name: bookingDetails.hostName || 'Host',
+      rejection_reason: bookingDetails.rejectionReason || 'Host unavailable for these dates'
+    };
+
+    console.log('📧 Sending booking rejection email to:', guestEmail);
+    console.log('📧 Using Account 3 - Service ID:', EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID);
+    console.log('📧 Using Template ID:', EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_REJECTED);
+
+    try {
+      const response = await window.emailjs.send(
+        EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID,
+        EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_REJECTED,
+        templateParams
+      );
+
+      console.log('✅ Booking rejection email sent successfully:', response);
+      return response;
+    } catch (account3Error) {
+      // Log the full error for debugging
+      console.error('❌ Account 3 error details:', {
+        status: account3Error.status,
+        text: account3Error.text,
+        message: account3Error.message,
+        serviceId: EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID,
+        templateId: EMAILJS_CONFIG_ACCOUNT3.TEMPLATE_REJECTED,
+        userId: EMAILJS_CONFIG_ACCOUNT3.USER_ID
+      });
+
+      // Only fallback if service ID is not found - don't fallback for other errors
+      const errorText = account3Error.text || account3Error.message || '';
+      const isServiceNotFound = account3Error.status === 400 && 
+        (errorText.toLowerCase().includes('service id not found') || 
+         errorText.toLowerCase().includes('service id') ||
+         errorText.toLowerCase().includes('service not found'));
+      
+      if (isServiceNotFound) {
+        console.warn('⚠️ Account 3 service not found. Please verify:');
+        console.warn('   - Service ID:', EMAILJS_CONFIG_ACCOUNT3.SERVICE_ID);
+        console.warn('   - USER_ID:', EMAILJS_CONFIG_ACCOUNT3.USER_ID);
+        console.warn('   - Make sure service_mwd78t3 exists in the account with this USER_ID');
+        console.warn('⚠️ NOT using fallback - rejection emails require Account 3 templates');
+        // Don't use fallback - Account 3 is required for proper rejection emails
+        throw new Error(`Account 3 service not found. Please configure service_mwd78t3 in EmailJS account with USER_ID: ${EMAILJS_CONFIG_ACCOUNT3.USER_ID}`);
+      }
+      
+      // For other errors, throw them
+      throw account3Error;
+    }
+  } catch (error) {
+    console.error('❌ Error sending booking rejection email:', error);
+    console.error('Error details:', {
+      status: error.status,
+      text: error.text,
+      message: error.message
+    });
+    // Don't throw - this is a non-critical notification
+    return null;
+  }
 };
 
 /**
  * Send cancellation refund email to guest
+ * Uses Account 1 - service_z8ms74u, template_8kvqbzd
  */
 export const sendCancellationRefundEmail = async (guestEmail, guestName, cancellationDetails) => {
-  return sendBookingNotificationEmail(guestEmail, guestName, cancellationDetails, 'cancellation');
+  try {
+    if (typeof window === 'undefined' || !window.emailjs) {
+      console.warn('EmailJS not available. Skipping cancellation refund email.');
+      return;
+    }
+
+    // Initialize EmailJS Account 1
+    try {
+      window.emailjs.init(EMAILJS_CONFIG.USER_ID);
+    } catch (initError) {
+      console.warn('EmailJS Account 1 already initialized or init failed:', initError);
+    }
+
+    const templateParams = {
+      to_email: guestEmail,
+      email: guestEmail,
+      guest_name: guestName || 'Guest',
+      listing_title: cancellationDetails.listingTitle || 'Your Booking',
+      booking_id: cancellationDetails.bookingId || 'N/A',
+      cancellation_date: cancellationDetails.cancellationDate || new Date().toLocaleDateString('en-US'),
+      original_amount: cancellationDetails.originalAmount ? `₱${cancellationDetails.originalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      cancellation_fee: cancellationDetails.cancellationFee ? `₱${cancellationDetails.cancellationFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      admin_deduction: cancellationDetails.adminDeduction ? `₱${cancellationDetails.adminDeduction.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      refund_amount: cancellationDetails.refundAmount ? `₱${cancellationDetails.refundAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '₱0.00',
+      cancellation_policy: cancellationDetails.cancellationPolicy || 'Standard cancellation policy'
+    };
+
+    console.log('📧 Sending cancellation refund email to:', guestEmail);
+    console.log('📧 Using Account 1 - Service ID:', EMAILJS_CONFIG.SERVICE_ID);
+    console.log('📧 Using Template ID:', EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS);
+
+    const response = await window.emailjs.send(
+      EMAILJS_CONFIG.SERVICE_ID,
+      EMAILJS_CONFIG.TEMPLATE_BOOKING_NOTIFICATIONS,
+      templateParams
+    );
+
+    console.log('✅ Cancellation refund email sent successfully:', response);
+    return response;
+  } catch (error) {
+    console.error('❌ Error sending cancellation refund email:', error);
+    // Don't throw - this is a non-critical notification
+    return null;
+  }
 };
 
 
@@ -190,7 +401,8 @@ export const sendAutoConfirmationEmail = async (guestEmail, guestName, bookingDe
       autoConfirmReason: 'Your booking was automatically confirmed because the host did not respond within 24 hours.'
     };
     
-    return sendBookingNotificationEmail(guestEmail, guestName, details, 'approval');
+    // Use the same approval email function
+    return sendBookingApprovalEmail(guestEmail, guestName, details);
   } catch (error) {
     console.error('❌ Error sending auto-confirmation email:', error);
     // Don't throw - this is a non-critical notification

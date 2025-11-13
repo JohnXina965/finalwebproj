@@ -240,7 +240,7 @@ const DateRangePicker = ({
 
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-gray-900 bg-opacity-70 z-50 flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
         >
           <div 
             ref={modalRef}

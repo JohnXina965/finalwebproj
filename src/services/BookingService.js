@@ -12,6 +12,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db } from '../Firebase';
+import { calculateServiceFee } from './ServiceFeeService';
 
 /**
  * Create a booking for a listing
@@ -287,26 +288,58 @@ export const updateBookingStatus = async (bookingId, status, additionalData = {}
         // Don't throw - booking status was updated successfully
       }
       
-      // When booking is confirmed, update payout status to ON_HOLD (ready for admin to release)
-      // Don't credit host wallet yet - admin will release payout manually through Payout Control Center
+      // Credit host wallet directly when booking is confirmed
+      // Payment goes directly to host, not through admin
       try {
-        // Find related payout record
-        const payoutsQuery = query(
-          collection(db, 'payouts'),
-          where('bookingId', '==', bookingId)
-        );
-        const payoutsSnapshot = await getDocs(payoutsQuery);
-        
-        if (!payoutsSnapshot.empty) {
-          const payoutDoc = payoutsSnapshot.docs[0];
-          await updateDoc(doc(db, 'payouts', payoutDoc.id), {
-            payoutStatus: 'ON_HOLD', // Ready for admin to release
-            updatedAt: serverTimestamp()
-          });
-          console.log(`✅ Payout status updated to ON_HOLD for booking ${bookingId}`);
+        const hostId = bookingData.hostId;
+        if (!hostId) {
+          throw new Error('Host ID not found in booking');
         }
-      } catch (payoutError) {
-        console.error('Error updating payout status:', payoutError);
+
+        // Calculate host payout (total - service fee)
+        const serviceFee = bookingData.serviceFee || calculateServiceFee(bookingData.totalAmount || 0);
+        const hostPayout = (bookingData.totalAmount || 0) - serviceFee;
+
+        if (hostPayout > 0) {
+          // Credit host wallet directly
+          const walletRef = doc(db, 'wallets', hostId);
+          const walletSnap = await getDoc(walletRef);
+          
+          const currentBalance = walletSnap.exists() ? (walletSnap.data().balance || 0) : 0;
+          const newBalance = currentBalance + hostPayout;
+
+          // Update wallet balance
+          await setDoc(walletRef, {
+            userId: hostId,
+            balance: newBalance,
+            currency: 'PHP',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          // Create transaction record
+          const transactionRef = doc(collection(db, 'walletTransactions'));
+          await setDoc(transactionRef, {
+            userId: hostId,
+            type: 'payment_received',
+            amount: hostPayout,
+            balanceAfter: newBalance,
+            status: 'completed',
+            description: `Payment for booking: ${bookingData.listingTitle || 'Listing'}`,
+            bookingId: bookingId,
+            createdAt: serverTimestamp()
+          });
+
+          // Update booking with payout status
+          await updateDoc(bookingRef, {
+            hostPayoutAmount: hostPayout,
+            hostPayoutStatus: 'paid',
+            payoutProcessedAt: serverTimestamp()
+          });
+
+          console.log(`✅ Host wallet credited: ₱${hostPayout} for booking ${bookingId}`);
+        }
+      } catch (walletError) {
+        console.error('Error crediting host wallet:', walletError);
         // Don't throw - booking status was updated successfully
       }
     } else if (status === 'cancelled' || status === 'rejected') {
@@ -353,94 +386,159 @@ export const updateBookingStatus = async (bookingId, status, additionalData = {}
         // Don't throw - booking status was updated successfully
       }
       
-      // Process refund - create refund payout record (refunds go through admin account)
-      const refundAmount = additionalData.refundAmount || bookingData.totalAmount || 0;
-      
-      if (refundAmount > 0) {
-        try {
-          // Find related payout record and mark as REFUNDED
-          const payoutsQuery = query(
-            collection(db, 'payouts'),
-            where('bookingId', '==', bookingId)
-          );
-          const payoutsSnapshot = await getDocs(payoutsQuery);
-          
-          if (!payoutsSnapshot.empty) {
-            // Update existing payout to REFUNDED
-            const payoutDoc = payoutsSnapshot.docs[0];
-            await updateDoc(doc(db, 'payouts', payoutDoc.id), {
-              payoutStatus: 'REFUNDED',
-              refundAmount: refundAmount,
-              refundedAt: serverTimestamp(),
-              refundedBy: 'system',
-              updatedAt: serverTimestamp()
-            });
-          } else {
-            // Create new refund payout record if no existing payout found
-            await addDoc(collection(db, 'payouts'), {
-              type: 'Refund',
-              bookingId: bookingId,
-              listingId: bookingData.listingId || '',
-              hostId: bookingData.hostId || '',
-              hostName: bookingData.hostName || 'Host',
-              guestId: bookingData.guestId,
-              guestName: bookingData.guestName || 'Guest',
-              guestEmail: bookingData.guestEmail || '',
-              amount: refundAmount,
-              totalAmount: refundAmount,
-              payoutStatus: 'REFUNDED',
-              paymentMethod: bookingData.paymentMethod || 'paypal',
-              adminPaypalEmail: 'sb-xivle46740431@business.admin.com',
-              refundedAt: serverTimestamp(),
-              refundedBy: 'system',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-          }
-          
-          // If wallet payment, refund to guest wallet
-          if (bookingData.paymentMethod === 'wallet') {
+      // Process refund when booking is rejected or cancelled
+      // For rejected bookings: Full refund to guest (no admin deduction)
+      // For cancelled bookings: Refund based on cancellation policy
+      if (status === 'rejected') {
+        // Rejected bookings get full refund (no admin deduction)
+        const fullRefundAmount = bookingData.totalAmount || 0;
+        
+        if (fullRefundAmount > 0) {
+          try {
             const guestId = bookingData.guestId;
-            
-            // Get guest's wallet
-            const guestWalletRef = doc(db, 'wallets', guestId);
-            const guestWalletSnap = await getDoc(guestWalletRef);
-            
-            const currentBalance = guestWalletSnap.exists() ? (guestWalletSnap.data().balance || 0) : 0;
-            const newBalance = currentBalance + refundAmount;
-            
-            // Update guest wallet
-            await setDoc(guestWalletRef, {
-              userId: guestId,
-              balance: newBalance,
-              currency: 'PHP',
-              updatedAt: serverTimestamp()
-            }, { merge: true });
-            
-            // Create transaction record for guest (refund)
-            const transactionRef = doc(collection(db, 'walletTransactions'));
-            await setDoc(transactionRef, {
-              userId: guestId,
-              type: 'refund',
-              amount: refundAmount,
-              balanceBefore: currentBalance,
-              balanceAfter: newBalance,
-              status: 'completed',
-              description: `Refund for cancelled/rejected booking: ${bookingData.listingTitle || 'Listing'}`,
-              bookingId: bookingId,
-              createdAt: serverTimestamp()
-            });
-            
-            console.log(`✅ Guest wallet refunded: ₱${refundAmount} to guest ${guestId}`);
-          } else if (bookingData.paymentMethod === 'paypal') {
-            // PayPal refund - refund payout record already created above
-            // Actual PayPal refund would be processed via PayPal API from admin account (sb-xivle46740431@business.admin.com)
-            console.log(`✅ Refund payout record created: ₱${refundAmount} for PayPal payment`);
+            if (guestId) {
+              // Refund full amount to guest wallet
+              const guestWalletRef = doc(db, 'wallets', guestId);
+              const guestWalletSnap = await getDoc(guestWalletRef);
+              
+              const currentBalance = guestWalletSnap.exists() ? (guestWalletSnap.data().balance || 0) : 0;
+              const newBalance = currentBalance + fullRefundAmount;
+
+              // Update guest wallet
+              await setDoc(guestWalletRef, {
+                userId: guestId,
+                balance: newBalance,
+                currency: 'PHP',
+                updatedAt: serverTimestamp()
+              }, { merge: true });
+
+              // Create refund transaction record
+              const transactionRef = doc(collection(db, 'walletTransactions'));
+              await setDoc(transactionRef, {
+                userId: guestId,
+                type: 'refund',
+                amount: fullRefundAmount,
+                balanceAfter: newBalance,
+                status: 'completed',
+                description: `Full refund for rejected booking: ${bookingData.listingTitle || 'Booking'}`,
+                bookingId: bookingId,
+                createdAt: serverTimestamp()
+              });
+
+              // Update booking with refund info
+              await updateDoc(bookingRef, {
+                refundAmount: fullRefundAmount,
+                refundProcessed: true,
+                refundProcessedAt: serverTimestamp()
+              });
+
+              console.log(`✅ Full refund processed: ₱${fullRefundAmount} to guest for rejected booking ${bookingId}`);
+            }
+          } catch (refundError) {
+            console.error('Error processing refund for rejected booking:', refundError);
+            // Don't throw - booking status was updated successfully
           }
-        } catch (refundError) {
-          console.error('Error processing refund:', refundError);
-          // Don't throw - booking status was updated successfully
         }
+      } else if (status === 'cancelled') {
+        // Cancelled bookings: Refund based on cancellation policy
+        const refundAmount = additionalData.refundAmount || 0;
+        
+        if (refundAmount > 0) {
+          try {
+            const guestId = bookingData.guestId;
+            if (guestId) {
+              // Refund calculated amount to guest wallet
+              const guestWalletRef = doc(db, 'wallets', guestId);
+              const guestWalletSnap = await getDoc(guestWalletRef);
+              
+              const currentBalance = guestWalletSnap.exists() ? (guestWalletSnap.data().balance || 0) : 0;
+              const newBalance = currentBalance + refundAmount;
+
+              // Update guest wallet
+              await setDoc(guestWalletRef, {
+                userId: guestId,
+                balance: newBalance,
+                currency: 'PHP',
+                updatedAt: serverTimestamp()
+              }, { merge: true });
+
+              // Create refund transaction record
+              const transactionRef = doc(collection(db, 'walletTransactions'));
+              await setDoc(transactionRef, {
+                userId: guestId,
+                type: 'refund',
+                amount: refundAmount,
+                balanceAfter: newBalance,
+                status: 'completed',
+                description: `Refund for cancelled booking: ${bookingData.listingTitle || 'Booking'}`,
+                bookingId: bookingId,
+                createdAt: serverTimestamp()
+              });
+
+              // Update booking with refund info
+              await updateDoc(bookingRef, {
+                refundAmount: refundAmount,
+                adminDeduction: additionalData.adminDeduction || 0,
+                cancellationFee: additionalData.cancellationFee || 0,
+                refundProcessed: true,
+                refundProcessedAt: serverTimestamp()
+              });
+
+              console.log(`✅ Refund processed: ₱${refundAmount} to guest for cancelled booking ${bookingId}`);
+            }
+          } catch (refundError) {
+            console.error('Error processing refund for cancelled booking:', refundError);
+            // Don't throw - booking status was updated successfully
+          }
+        }
+      }
+      
+      // Legacy payout record handling (for backwards compatibility)
+      try {
+        const payoutsQuery = query(
+          collection(db, 'payouts'),
+          where('bookingId', '==', bookingId)
+        );
+        const payoutsSnapshot = await getDocs(payoutsQuery);
+        
+        if (!payoutsSnapshot.empty) {
+          const payoutDoc = payoutsSnapshot.docs[0];
+          await updateDoc(doc(db, 'payouts', payoutDoc.id), {
+            payoutStatus: 'REFUNDED',
+            refundAmount: status === 'rejected' ? (bookingData.totalAmount || 0) : (additionalData.refundAmount || 0),
+            refundedAt: serverTimestamp(),
+            refundedBy: 'system',
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          // Create new refund payout record if no existing payout found
+          const refundAmountForPayout = status === 'rejected' 
+            ? (bookingData.totalAmount || 0) 
+            : (additionalData.refundAmount || 0);
+          
+          await addDoc(collection(db, 'payouts'), {
+            type: 'Refund',
+            bookingId: bookingId,
+            listingId: bookingData.listingId || '',
+            hostId: bookingData.hostId || '',
+            hostName: bookingData.hostName || 'Host',
+            guestId: bookingData.guestId,
+            guestName: bookingData.guestName || 'Guest',
+            guestEmail: bookingData.guestEmail || '',
+            amount: refundAmountForPayout,
+            totalAmount: refundAmountForPayout,
+            payoutStatus: 'REFUNDED',
+            paymentMethod: bookingData.paymentMethod || 'paypal',
+            adminPaypalEmail: 'sb-xivle46740431@business.admin.com',
+            refundedAt: serverTimestamp(),
+            refundedBy: 'system',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (payoutError) {
+        console.error('Error updating legacy payout record:', payoutError);
+        // Don't throw - booking status was updated successfully
       }
     } else if (status === 'completed') {
       updates.completedAt = serverTimestamp();

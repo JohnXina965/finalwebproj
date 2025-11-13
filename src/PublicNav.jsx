@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import logo from './assets/logo.png';
+import ThemeToggle from './components/ThemeToggle';
 
 function PublicNav() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -103,6 +104,7 @@ function PublicNav() {
 
           {/* Right Section - Premium CTA Buttons */}
           <div className="hidden md:flex items-center space-x-3">
+            
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}

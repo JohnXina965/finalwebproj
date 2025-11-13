@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHost } from '../../contexts/HostContext';
 import { useWallet } from '../../contexts/WalletContext';
+import { motion } from 'framer-motion';
 import { renewListing, isListingExpired, getDaysUntilExpiration } from '../../services/ListingExpirationService';
 import toast from 'react-hot-toast';
 import HostReviewGuest from '../../components/HostReviewGuest';
@@ -611,16 +612,17 @@ const HostDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex">
       {/* Sidebar Navigation */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r-2 border-gray-200 shadow-xl lg:shadow-none transition-all duration-300 ease-in-out transform ${
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 shadow-lg lg:shadow-none transition-all duration-300 ease-in-out transform py-15 ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       }`}>
         <div className="flex flex-col h-full pt-16 lg:pt-0">
           {/* Sidebar Header */}
-          <div className="p-6 border-b-2 border-gray-100">
+          <div className="p-6 border-b-2 border-white/20 border-gray-200">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-teal-600 to-emerald-600 from-teal-600 to-emerald-600 bg-clip-text text-transparent">
                 Host Dashboard
               </h2>
               <button
@@ -727,7 +729,7 @@ const HostDashboard = () => {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0 pt-16">
+      <div className="flex-1 lg:ml-0 pt-16 relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Mobile Menu Button */}
           <button
@@ -739,18 +741,23 @@ const HostDashboard = () => {
             </svg>
           </button>
 
-          {/* Welcome Header */}
-          <div className="mb-8 animate-fadeIn">
+          {/* Welcome Header with Premium Design */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-8"
+          >
             <div className="flex items-center justify-between">
               <div className="space-y-2">
-                <h1 className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent animate-gradient transition-all duration-500 ease-out">
+                <h1 className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 from-teal-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent animate-gradient transition-all duration-500 ease-out">
                   Welcome back, {currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Host'}!
                 </h1>
-                <p className="text-gray-600 text-base lg:text-lg transition-all duration-500 ease-out delay-100">
-                  Manage your <span className="font-semibold text-teal-600">{listings.length}</span> listings and grow your hosting business
+                <p className="text-gray-600 text-gray-600 text-base lg:text-lg transition-all duration-500 ease-out delay-100">
+                Manage your <span className="font-semibold text-teal-600">{listings.length}</span> listings and grow your hosting business
                 </p>
               </div>
-              <div className="hidden lg:flex items-center space-x-2 bg-white px-5 py-2.5 rounded-full shadow-md border-2 border-green-200 transition-all duration-300 hover:shadow-lg hover:scale-105 hover:border-green-300">
+              <div className="hidden lg:flex items-center space-x-2 bg-white px-5 py-2.5 rounded-full shadow-md border-2 border-green-200 border-gray-200 transition-all duration-300 hover:shadow-lg hover:scale-105 hover:border-green-300 hover:border-gray-300">
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
                 <span className="text-sm font-semibold text-gray-700">Online</span>
               </div>
@@ -768,7 +775,7 @@ const HostDashboard = () => {
                 Report Issue
               </button>
             </div>
-          </div>
+          </motion.div>
 
         {/* Stats Cards - Only show on Dashboard section */}
         <div className={`transition-all duration-700 ease-in-out ${
@@ -843,6 +850,7 @@ const HostDashboard = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Feedback Modal */}
@@ -1395,7 +1403,7 @@ const UpgradeModal = ({ isOpen, onClose, currentPlanId, currentListingCount, bal
   const currentPlan = getSubscriptionPlan(currentPlanId);
 
   return (
-    <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
           <div className="flex items-center justify-between">
@@ -1494,7 +1502,7 @@ const AddSlotsModal = ({ isOpen, onClose, balance, onPurchase, processing }) => 
   const slotInfo = ADDITIONAL_LISTING_PRICES.oneTime;
 
   return (
-    <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -1914,7 +1922,7 @@ const ListingCard = ({ listing, isDraft, onDelete, onToggleStatus, onEdit }) => 
       
       {/* Renewal Modal */}
       {showRenewModal && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Renew Listing</h3>
             <p className="text-gray-600 mb-4">
@@ -2401,7 +2409,7 @@ const DashboardOverview = ({ stats, listings, bookings }) => {
     
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
       {/* Quick Actions */}
-      {/* <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
+      <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
         <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
           <span className="w-2 h-2 bg-teal-500 rounded-full mr-3 animate-pulse"></span>
           Quick Actions
@@ -2455,7 +2463,7 @@ const DashboardOverview = ({ stats, listings, bookings }) => {
             <span className="text-gray-400 group-hover:text-teal-600 transition-all duration-300">→</span>
           </Link>
         </div>
-      </div> */}
+      </div>
 
       {/* Bookings Section - Today/Upcoming */}
       <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-6 border border-gray-200/60">
@@ -2735,6 +2743,9 @@ const BookingsSection = ({ bookings, listings }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelRefundDetails, setCancelRefundDetails] = useState(null);
   const [cancelBookingId, setCancelBookingId] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectBookingId, setRejectBookingId] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState('');
   const [filter, setFilter] = useState('all'); // 'all', 'pending', 'confirmed', 'completed', 'cancelled'
   const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'guest'
   const [searchQuery, setSearchQuery] = useState('');
@@ -2750,7 +2761,15 @@ const BookingsSection = ({ bookings, listings }) => {
 
   const handleBookingAction = async (bookingId, action) => {
     if (action === 'accept' && !window.confirm('Accept this booking?')) return;
-    if (action === 'reject' && !window.confirm('Reject this booking? The guest will be notified.')) return;
+    
+    if (action === 'reject') {
+      // Show rejection modal instead of confirm
+      setRejectBookingId(bookingId);
+      setRejectionReason('');
+      setShowRejectModal(true);
+      setProcessing({ ...processing, [bookingId]: false });
+      return;
+    }
 
     try {
       setProcessing({ ...processing, [bookingId]: true });
@@ -2790,31 +2809,6 @@ const BookingsSection = ({ bookings, listings }) => {
           // Don't fail the booking update if email fails
         }
         
-      } else if (action === 'reject') {
-        updates.status = 'rejected';
-        updates.rejectedAt = serverTimestamp();
-        
-        // Send rejection email
-        try {
-          await sendBookingRejectionEmail(
-            bookingData.guestEmail,
-            bookingData.guestName,
-            {
-              listingTitle: bookingData.listingTitle || 'Your Booking',
-              checkIn: bookingData.checkIn?.toDate ? bookingData.checkIn.toDate().toLocaleDateString('en-US') : 'N/A',
-              checkOut: bookingData.checkOut?.toDate ? bookingData.checkOut.toDate().toLocaleDateString('en-US') : 'N/A',
-              totalAmount: bookingData.totalAmount,
-              bookingId: bookingId,
-              hostName: currentUser.displayName || 'Host',
-              rejectionReason: 'Host unavailable for these dates'
-            }
-          );
-          console.log('✅ Rejection email sent');
-        } catch (emailError) {
-          console.error('Failed to send rejection email:', emailError);
-          // Don't fail the booking update if email fails
-        }
-        
       } else if (action === 'cancel') {
         // Host cancellation - show modal instead of confirm
         const { calculateRefund } = await import('../../services/RefundService');
@@ -2833,6 +2827,82 @@ const BookingsSection = ({ bookings, listings }) => {
       toast.error(`Failed to ${action} booking. Please try again.`);
     } finally {
       setProcessing({ ...processing, [bookingId]: false });
+    }
+  };
+
+  // Built-in rejection reasons
+  const rejectionReasons = [
+    'Property unavailable for these dates',
+    'Host unavailable for these dates',
+    'Maintenance scheduled during this period',
+    'Double booking - already reserved',
+    'Guest requirements cannot be met',
+    'Property not suitable for number of guests',
+    'Other (please specify)'
+  ];
+
+  // Handle rejection with reason
+  const handleRejectBooking = async () => {
+    if (!rejectBookingId) return;
+    if (!rejectionReason.trim()) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
+
+    try {
+      setProcessing({ ...processing, [rejectBookingId]: true });
+      const bookingRef = doc(db, 'bookings', rejectBookingId);
+      const bookingDoc = await getDoc(bookingRef);
+      
+      if (!bookingDoc.exists()) {
+        throw new Error('Booking not found');
+      }
+      
+      const bookingData = bookingDoc.data();
+      
+      // Update booking status
+      await updateDoc(bookingRef, {
+        status: 'rejected',
+        rejectedAt: serverTimestamp(),
+        rejectionReason: rejectionReason.trim(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Send rejection email with reason
+      try {
+        await sendBookingRejectionEmail(
+          bookingData.guestEmail,
+          bookingData.guestName,
+          {
+            listingTitle: bookingData.listingTitle || 'Your Booking',
+            checkIn: bookingData.checkIn?.toDate ? bookingData.checkIn.toDate().toLocaleDateString('en-US') : 'N/A',
+            checkOut: bookingData.checkOut?.toDate ? bookingData.checkOut.toDate().toLocaleDateString('en-US') : 'N/A',
+            totalAmount: bookingData.totalAmount,
+            bookingId: rejectBookingId,
+            hostName: currentUser.displayName || 'Host',
+            rejectionReason: rejectionReason.trim()
+          }
+        );
+        console.log('✅ Rejection email sent');
+      } catch (emailError) {
+        console.error('Failed to send rejection email:', emailError);
+      }
+
+      // Update booking status via BookingService (for refund processing)
+      const { updateBookingStatus } = await import('../../services/BookingService');
+      await updateBookingStatus(rejectBookingId, 'rejected', {
+        rejectionReason: rejectionReason.trim()
+      });
+
+      toast.success('Booking rejected successfully');
+      setShowRejectModal(false);
+      setRejectBookingId(null);
+      setRejectionReason('');
+    } catch (error) {
+      console.error('Error rejecting booking:', error);
+      toast.error('Failed to reject booking. Please try again.');
+    } finally {
+      setProcessing({ ...processing, [rejectBookingId]: false });
     }
   };
 
@@ -3314,7 +3384,7 @@ const BookingsSection = ({ bookings, listings }) => {
 
       {/* Booking Details Modal */}
       {showBookingModal && selectedBooking && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg z-50 flex items-center justify-center p-4" onClick={() => setShowBookingModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowBookingModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">Booking Details</h3>
@@ -3542,6 +3612,108 @@ const BookingsSection = ({ bookings, listings }) => {
           isProcessing={processing[cancelBookingId] || false}
           userType="host"
         />
+      )}
+
+      {/* Rejection Reason Modal */}
+      {showRejectModal && rejectBookingId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowRejectModal(false)}>
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">❌</span>
+                <h2 className="text-xl font-bold text-gray-900">Reject Booking</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectBookingId(null);
+                  setRejectionReason('');
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <p className="text-gray-600 mb-4">
+                Please provide a reason for rejecting this booking. The guest will be notified and receive a full refund.
+              </p>
+
+              {/* Built-in Reasons */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quick Select Reason:</label>
+                <div className="space-y-2">
+                  {rejectionReasons.map((reason, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        if (reason === 'Other (please specify)') {
+                          setRejectionReason('');
+                        } else {
+                          setRejectionReason(reason);
+                        }
+                      }}
+                      className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${
+                        rejectionReason === reason
+                          ? 'border-green-600 bg-green-50 text-green-900'
+                          : 'border-gray-200 hover:border-green-300 hover:bg-green-50 text-gray-700'
+                      }`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Reason Input */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rejection Reason:
+                </label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter rejection reason..."
+                  rows={4}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectBookingId(null);
+                    setRejectionReason('');
+                  }}
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectBooking}
+                  disabled={!rejectionReason.trim() || processing[rejectBookingId]}
+                  className={`flex-1 px-4 py-3 rounded-lg font-semibold text-white transition-colors ${
+                    !rejectionReason.trim() || processing[rejectBookingId]
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+                  }`}
+                >
+                  {processing[rejectBookingId] ? 'Processing...' : 'Reject Booking'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -4684,7 +4856,7 @@ const CalendarSection = ({ bookings, listings }) => {
 
       {/* Booking Details Modal - Enhanced Design */}
       {selectedBookingDate && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={() => setSelectedBookingDate(null)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedBookingDate(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Orange Header */}
             <div className="bg-[#FF6B35] text-white p-6 rounded-t-2xl relative">
@@ -4810,7 +4982,7 @@ const CalendarSection = ({ bookings, listings }) => {
 
       {/* Block/Unblock Modal */}
       {showBlockModal && selectedDate && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
               {blockedDates.includes(selectedDate.toISOString().split('T')[0]) ? 'Unblock Date' : 'Block Date'}
@@ -4854,6 +5026,7 @@ const SubscriptionSection = ({ hostSubscription, balance, listings, onSubscripti
   const [showAddSlotsModal, setShowAddSlotsModal] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [slotType, setSlotType] = useState('oneTime');
 
   const subscriptionPlan = getSubscriptionPlan(hostSubscription.planId);
   const listingAvailability = canCreateListing(
@@ -5018,7 +5191,7 @@ const SubscriptionSection = ({ hostSubscription, balance, listings, onSubscripti
 
       {/* Add Slots Modal */}
       {showAddSlotsModal && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4" onClick={() => setShowAddSlotsModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAddSlotsModal(false)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -5672,7 +5845,7 @@ const CouponsSection = () => {
 
       {/* Template Modal */}
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
               <div className="flex items-center justify-between">
@@ -5825,13 +5998,16 @@ const PaymentsSection = ({ bookings, listings }) => {
   useEffect(() => {
     if (!currentUser) return;
     
+    let unsubscribe = null;
+    
+    // Try query with orderBy first, fallback to without orderBy if index is missing
     const q = query(
       collection(db, 'payoutRequests'),
       where('hostId', '==', currentUser.uid),
       orderBy('createdAt', 'desc')
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    unsubscribe = onSnapshot(q, (snapshot) => {
       const requests = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -5840,11 +6016,41 @@ const PaymentsSection = ({ bookings, listings }) => {
       setPayoutRequests(requests);
       setLoadingPayouts(false);
     }, (error) => {
-      console.error('Error loading payout requests:', error);
-      setLoadingPayouts(false);
+      // If index error, try without orderBy
+      if (error.code === 'failed-precondition' || error.message.includes('index')) {
+        console.warn('Firestore index not found, loading without orderBy:', error);
+        const qWithoutOrder = query(
+          collection(db, 'payoutRequests'),
+          where('hostId', '==', currentUser.uid)
+        );
+        
+        unsubscribe = onSnapshot(qWithoutOrder, (snapshot) => {
+          const requests = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt?.seconds * 1000)
+          }));
+          // Sort manually by createdAt descending
+          requests.sort((a, b) => {
+            const dateA = a.createdAt || new Date(0);
+            const dateB = b.createdAt || new Date(0);
+            return dateB - dateA;
+          });
+          setPayoutRequests(requests);
+          setLoadingPayouts(false);
+        }, (error2) => {
+          console.error('Error loading payout requests:', error2);
+          setLoadingPayouts(false);
+        });
+      } else {
+        console.error('Error loading payout requests:', error);
+        setLoadingPayouts(false);
+      }
     });
     
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [currentUser]);
   
   const handleRequestPayout = async () => {
@@ -6229,7 +6435,7 @@ const PaymentsSection = ({ bookings, listings }) => {
       
       {/* Payout Request Modal */}
       {showPayoutModal && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50" onClick={() => setShowPayoutModal(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowPayoutModal(false)}>
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">Request Payout</h3>
@@ -6643,7 +6849,7 @@ const ReviewsSection = ({ listings, bookings }) => {
 
       {/* Response Modal */}
       {showResponseModal && selectedReview && (
-        <div className="fixed inset-0 bg-blue-900/40 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
             <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">Respond to Review</h3>

@@ -7,6 +7,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { HostProvider } from './contexts/HostContext';
 import { OTPProvider } from './contexts/OTPContext';
 import { WalletProvider } from './contexts/WalletContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { initEmailJS } from './services/EmailService';
 import { checkAndExpireListings } from './services/ListingExpirationService';
 import { checkAndAutoConfirmBookings } from './services/BookingAutoConfirmService';
@@ -185,11 +186,12 @@ function App() {
   }, []);
 
   return ( 
-    <AuthProvider>
-      <OTPProvider>
-        <WalletProvider>
-          <HostProvider>
-            <Router>
+    <ThemeProvider>
+      <AuthProvider>
+        <OTPProvider>
+          <WalletProvider>
+            <HostProvider>
+              <Router>
               <ScrollToTop />
               <Toaster 
                 position="top-right"
@@ -295,11 +297,12 @@ function App() {
                 </div>
                 <ConditionalFooter />
               </div>
-            </Router>
-        </HostProvider>
-      </WalletProvider>
-      </OTPProvider>
-    </AuthProvider>
+              </Router>
+            </HostProvider>
+          </WalletProvider>
+        </OTPProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

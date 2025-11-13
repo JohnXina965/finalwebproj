@@ -5,6 +5,7 @@ import { db } from '../../Firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { getGuestRecommendations } from '../../services/RecommendationService';
 import DateRangePicker from '../../components/DateRangePicker';
+import { motion } from 'framer-motion';
 
 function GuestHomePage() {
   const { currentUser } = useAuth();
@@ -256,7 +257,7 @@ function GuestHomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Hero Section with background video */}
       <section className="relative text-white py-20 overflow-hidden">
         <video
@@ -268,7 +269,7 @@ function GuestHomePage() {
           playsInline
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/30" />
-        <div className="relative container mx-auto px-4">
+        <div className="relative container mx-auto px-4 py-20">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl md:text-6xl font-bold mb-6">
               Find Eco-Friendly Stays
@@ -402,7 +403,7 @@ function GuestHomePage() {
       </section>
 
       {/* Featured Accommodations - With Navigation Arrows */}
-<section className="py-16 bg-gray-50">
+      <section className="py-16 bg-gray-50">
   <div className="container mx-auto px-4">
     <div className="flex justify-between items-center mb-8">
       <div>
@@ -417,7 +418,7 @@ function GuestHomePage() {
     {loading ? (
       <div className="flex overflow-x-auto pb-6 gap-6 px-2">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="bg-white rounded-xl shadow-sm overflow-hidden flex-shrink-0 animate-pulse" style={{ minWidth: '300px', maxWidth: '300px' }}>
+          <div key={i} className="bg-white rounded-xl shadow-sm overflow-hidden flex-shrink-0 animate-pulse border border-gray-100" style={{ minWidth: '300px', maxWidth: '300px' }}>
             <div className="h-48 bg-gradient-to-br from-gray-200 to-gray-300"></div>
             <div className="p-4 space-y-3">
               <div className="h-4 bg-gray-200 rounded w-3/4"></div>
@@ -485,11 +486,10 @@ function GuestHomePage() {
             {filteredAccommodations.map((stay, index) => (
             <div 
               key={stay.id} 
-              className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group flex-shrink-0 transform hover:-translate-y-2"
+              className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex-shrink-0 border border-gray-100"
               style={{ 
                 minWidth: '300px', 
-                maxWidth: '300px',
-                animation: `fadeInUp 0.5s ease-out ${index * 0.1}s both`
+                maxWidth: '300px'
               }}
             >
               <div className="relative h-48 overflow-hidden bg-gradient-to-br from-teal-400 to-green-500">
@@ -606,7 +606,7 @@ function GuestHomePage() {
       </div>
     )}
   </div>
-</section>
+      </section>
 
       {/* Recommended for You Section - Only show if user is logged in */}
       {currentUser && (
@@ -868,7 +868,8 @@ function GuestHomePage() {
         </div>
       </section> */}
 
-    </div>
+      </div>
+    
   );
 }
 
